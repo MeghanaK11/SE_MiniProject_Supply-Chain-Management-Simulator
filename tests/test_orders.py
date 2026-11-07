@@ -3,8 +3,31 @@ import pytest
 from src.orders import CustomerOrder, FULFILLED, PARTIAL, PENDING
 
 
-def make_order(quantity=10):
-    return CustomerOrder(order_id="CO-0001", product_id="P-001", quantity=quantity, day=1)
+def make_order(**overrides):
+    fields = {"order_id": "CO-0001", "product_id": "P-001", "quantity": 10, "day": 1}
+    fields.update(overrides)
+    return CustomerOrder(**fields)
+
+
+@pytest.mark.parametrize("overrides", [
+    {"quantity": 0},
+    {"quantity": -5},
+    {"quantity": 2.5},
+    {"quantity": True},
+    {"order_id": " "},
+    {"product_id": ""},
+    {"day": -3},
+    {"day": 1.5},
+    {"fulfilled_qty": 50},
+    {"fulfilled_qty": -1},
+    {"status": "NONSENSE"},
+    {"fulfilled_qty": 0, "status": FULFILLED},
+    {"fulfilled_qty": 4, "status": PENDING},
+])
+def test_invalid_order_rejected(overrides):
+    """TC-ORD-05: an order with invalid or inconsistent fields cannot be created."""
+    with pytest.raises(ValueError):
+        make_order(**overrides)
 
 
 def test_new_order_pending():
@@ -34,17 +57,10 @@ def test_full_shipment():
 
 
 @pytest.mark.parametrize("bad_qty", [11, 0, -2])
-def test_invalid_shipment_rejected(bad_qty):
-    """TC-ORD-09: shipping more than remaining, zero or a negative amount is rejected."""
+def test_overshipment_rejected(bad_qty):
+    """TC-ORD-09: shipping more than remaining, zero or a negative amount is rejected and changes nothing."""
     order = make_order()
     with pytest.raises(ValueError):
         order.apply_shipment(bad_qty)
     assert order.fulfilled_qty == 0
     assert order.status == PENDING
-
-
-@pytest.mark.parametrize("bad_quantity", [0, -5, 2.5, True])
-def test_invalid_order_quantity_rejected(bad_quantity):
-    """TC-ORD-09: an order quantity below 1 or not a whole number is rejected."""
-    with pytest.raises(ValueError):
-        make_order(quantity=bad_quantity)

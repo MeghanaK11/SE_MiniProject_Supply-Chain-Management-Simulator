@@ -8,11 +8,19 @@ from dataclasses import dataclass
 PENDING = "PENDING"
 PARTIAL = "PARTIAL"
 FULFILLED = "FULFILLED"
+STATUSES = (PENDING, PARTIAL, FULFILLED)
 
 
 def _is_int(value) -> bool:
     """True for real integers; bool is excluded on purpose."""
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _status_for(fulfilled_qty: int, quantity: int) -> str:
+    """The only status that is consistent with the shipped amount."""
+    if fulfilled_qty == 0:
+        return PENDING
+    return FULFILLED if fulfilled_qty == quantity else PARTIAL
 
 
 @dataclass
@@ -27,8 +35,25 @@ class CustomerOrder:
     status: str = PENDING
 
     def __post_init__(self):
+        for field in ("order_id", "product_id"):
+            value = getattr(self, field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field} must be a non-empty string")
         if not _is_int(self.quantity) or self.quantity < 1:
             raise ValueError(f"quantity must be an integer of at least 1, got {self.quantity!r}")
+        if not _is_int(self.day) or self.day < 0:
+            raise ValueError(f"day must be an integer of 0 or more, got {self.day!r}")
+        if not _is_int(self.fulfilled_qty) or not 0 <= self.fulfilled_qty <= self.quantity:
+            raise ValueError(
+                f"fulfilled_qty must be an integer from 0 to {self.quantity}, got {self.fulfilled_qty!r}"
+            )
+        if self.status not in STATUSES:
+            raise ValueError(f"status must be one of {STATUSES}, got {self.status!r}")
+        expected = _status_for(self.fulfilled_qty, self.quantity)
+        if self.status != expected:
+            raise ValueError(
+                f"status {self.status} does not match fulfilled_qty {self.fulfilled_qty}; expected {expected}"
+            )
 
     @property
     def remaining(self) -> int:
@@ -42,4 +67,4 @@ class CustomerOrder:
                 f"shipment must be an integer from 1 to {self.remaining}, got {qty!r}"
             )
         self.fulfilled_qty += qty
-        self.status = FULFILLED if self.remaining == 0 else PARTIAL
+        self.status = _status_for(self.fulfilled_qty, self.quantity)
