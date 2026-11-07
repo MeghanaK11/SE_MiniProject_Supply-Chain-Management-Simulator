@@ -2,6 +2,7 @@
 
 The product catalog (SCM-F-002) is added to this module in a later backlog item.
 """
+import math
 from dataclasses import dataclass
 
 COST_FIELDS = ("unit_cost", "holding_cost_per_day", "stockout_penalty", "order_cost")
@@ -28,6 +29,8 @@ class Product:
             value = getattr(self, field)
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(f"{field} must be a number, got {value!r}")
+            if not math.isfinite(value):
+                raise ValueError(f"{field} must be a finite number, got {value!r}")
             if value < 0:
                 raise ValueError(f"{field} must be 0 or more, got {value!r}")
 

@@ -13,7 +13,7 @@ P001 = {
 
 
 def test_product_valid_creation():
-    """TC-PRD-01: from_dict on the P-001 entry gives matching fields."""
+    """TC-PRD-01: from_dict on the P-001 entry gives matching fields; extra keys are ignored."""
     product = Product.from_dict(P001)
     assert product.product_id == "P-001"
     assert product.name == "Packaged Drinking Water (case of 12)"
@@ -21,6 +21,8 @@ def test_product_valid_creation():
     assert product.holding_cost_per_day == 0.5
     assert product.stockout_penalty == 30.0
     assert product.order_cost == 500.0
+    extra = Product.from_dict(dict(P001, notes="seasonal"))
+    assert extra == product
 
 
 @pytest.mark.parametrize("field", ["product_id", "name"])
@@ -32,9 +34,9 @@ def test_product_empty_id_rejected(field):
 
 
 @pytest.mark.parametrize("field", COST_FIELDS)
-@pytest.mark.parametrize("bad_value", [-1, "120", True])
+@pytest.mark.parametrize("bad_value", [-1, "120", True, float("nan"), float("inf")])
 def test_product_negative_cost_rejected(field, bad_value):
-    """TC-PRD-03: a negative or non-numeric cost raises ValueError naming the field."""
+    """TC-PRD-03: a negative, non-numeric, NaN or infinite cost raises ValueError naming the field."""
     data = dict(P001, **{field: bad_value})
     with pytest.raises(ValueError, match=field):
         Product.from_dict(data)
@@ -45,9 +47,3 @@ def test_product_from_dict_missing_key():
     data = {k: v for k, v in P001.items() if k != "order_cost"}
     with pytest.raises(ValueError, match="order_cost"):
         Product.from_dict(data)
-
-
-def test_product_ignores_extra_keys():
-    """TC-PRD-01: extra keys in the config entry do not stop the product being created."""
-    product = Product.from_dict(dict(P001, notes="seasonal"))
-    assert product.product_id == "P-001"
