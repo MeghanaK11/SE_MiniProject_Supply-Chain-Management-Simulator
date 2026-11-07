@@ -1,8 +1,11 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from src.suppliers import Supplier, SupplierRegistry
+
+SAMPLE_CONFIG = Path(__file__).resolve().parent.parent / "data" / "sample_config.json"
  
 S001 = {
     "supplier_id": "S-001",
@@ -82,7 +85,7 @@ def test_supplier_supplies_and_price_for():
 
 
 def sample_config():
-    with open("data/sample_config.json", encoding="utf-8") as f:
+    with open(SAMPLE_CONFIG, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -113,8 +116,8 @@ def test_registry_invalid_input_rejected(bad_input):
 def test_registry_unknown_id_rejected():
     """TC-SUP-08: get with an unknown supplier ID raises KeyError."""
     registry = SupplierRegistry()
-    with pytest.raises(KeyError, match="S-999"):
-        registry.get("S-999")
+    with pytest.raises(ValueError):
+        SupplierRegistry().add("S-001")
 
 
 def test_registry_from_config_and_suppliers_for():

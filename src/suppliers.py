@@ -103,7 +103,9 @@ class SupplierRegistry:
         self._suppliers = {}
 
     def add(self, supplier: Supplier) -> None:
-        """Add a supplier; ValueError if its ID is already registered."""
+        """Add a supplier; ValueError if it is not a Supplier or its ID is already registered."""
+        if not isinstance(supplier, Supplier):
+            raise ValueError(f"expected a Supplier, got {supplier!r}")
         if supplier.supplier_id in self._suppliers:
             raise ValueError(f"duplicate supplier_id '{supplier.supplier_id}'")
         self._suppliers[supplier.supplier_id] = supplier
