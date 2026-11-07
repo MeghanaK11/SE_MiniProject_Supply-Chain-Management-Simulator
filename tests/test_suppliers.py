@@ -1,6 +1,8 @@
+import json
+
 import pytest
- 
-from src.suppliers import Supplier
+
+from src.suppliers import Supplier, SupplierRegistry
  
 S001 = {
     "supplier_id": "S-001",
@@ -77,4 +79,50 @@ def test_supplier_supplies_and_price_for():
     assert supplier.price_for("P-002") == 1350.0
     with pytest.raises(KeyError, match="P-003"):
         supplier.price_for("P-003")
- 
+
+
+def sample_config():
+    with open("data/sample_config.json", encoding="utf-8") as f:
+        return json.load(f)
+
+
+S003 = dict(S001, supplier_id="S-003", name="Northern Rail Supplies",
+            prices={"P-002": 1280.0, "P-003": 600.0})
+
+
+def test_registry_add_get_and_list_all():
+    """TC-SUP-06: added suppliers can be fetched by ID; list_all returns them sorted by ID."""
+    registry = SupplierRegistry()
+    s003 = Supplier.from_dict(S003)
+    s001 = Supplier.from_dict(S001)
+    registry.add(s003)
+    registry.add(s001)
+    assert registry.get("S-001") is s001
+    assert registry.get("S-003") is s003
+    assert registry.list_all() == [s001, s003]
+    assert SupplierRegistry().list_all() == []
+
+
+@pytest.mark.parametrize("bad_input", [{"S-001": S001}, None, [S001, "S-002"], [S001, S001]])
+def test_registry_invalid_input_rejected(bad_input):
+    """TC-SUP-07: a duplicate ID, a suppliers value that is not a list, or an entry that is not a dict raises ValueError."""
+    with pytest.raises(ValueError):
+        SupplierRegistry.from_config(bad_input)
+
+
+def test_registry_unknown_id_rejected():
+    """TC-SUP-08: get with an unknown supplier ID raises KeyError."""
+    registry = SupplierRegistry()
+    with pytest.raises(KeyError, match="S-999"):
+        registry.get("S-999")
+
+
+def test_registry_from_config_and_suppliers_for():
+    """TC-SUP-09: from_config loads cfg["suppliers"]; suppliers_for lists who sells each product, sorted by ID."""
+    registry = SupplierRegistry.from_config(sample_config()["suppliers"])
+    assert [s.supplier_id for s in registry.suppliers_for("P-001")] == ["S-001", "S-002"]
+    assert [s.supplier_id for s in registry.suppliers_for("P-002")] == ["S-001", "S-003"]
+    assert [s.supplier_id for s in registry.suppliers_for("P-003")] == ["S-002", "S-003"]
+    assert registry.suppliers_for("P-999") == []
+    reversed_order = SupplierRegistry.from_config([S003, S001])
+    assert [s.supplier_id for s in reversed_order.suppliers_for("P-002")] == ["S-001", "S-003"]

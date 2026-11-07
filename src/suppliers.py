@@ -93,4 +93,43 @@ class Supplier:
         if isinstance(values["prices"], dict):
             values["prices"] = dict(values["prices"])
         return cls(**values)
- 
+
+
+
+class SupplierRegistry:
+    """All suppliers in a scenario, looked up by ID or by product (SCM-F-011)."""
+
+    def __init__(self):
+        self._suppliers = {}
+
+    def add(self, supplier: Supplier) -> None:
+        """Add a supplier; ValueError if its ID is already registered."""
+        if supplier.supplier_id in self._suppliers:
+            raise ValueError(f"duplicate supplier_id '{supplier.supplier_id}'")
+        self._suppliers[supplier.supplier_id] = supplier
+
+    def get(self, supplier_id: str) -> Supplier:
+        """Return the supplier with this ID; KeyError if it is unknown."""
+        if supplier_id not in self._suppliers:
+            raise KeyError(f"unknown supplier_id '{supplier_id}'")
+        return self._suppliers[supplier_id]
+
+    def list_all(self) -> list:
+        """All suppliers, sorted by supplier_id."""
+        return [self._suppliers[sid] for sid in sorted(self._suppliers)]
+
+    def suppliers_for(self, product_id: str) -> list:
+        """Suppliers that sell the product, sorted by supplier_id."""
+        return [s for s in self.list_all() if s.supplies(product_id)]
+
+    @classmethod
+    def from_config(cls, supplier_dicts: list) -> "SupplierRegistry":
+        """Build a registry from the suppliers list of the config (cfg["suppliers"])."""
+        if not isinstance(supplier_dicts, list):
+            raise ValueError("suppliers must be a list of supplier entries")
+        registry = cls()
+        for entry in supplier_dicts:
+            if not isinstance(entry, dict):
+                raise ValueError(f"each supplier entry must be a dict, got {entry!r}")
+            registry.add(Supplier.from_dict(entry))
+        return registry
