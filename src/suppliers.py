@@ -114,14 +114,22 @@ class SupplierRegistry:
             raise KeyError(f"unknown supplier_id '{supplier_id}'")
         return self._suppliers[supplier_id]
 
+    def list_all(self) -> list:
+        """All suppliers, sorted by supplier_id."""
+        return [self._suppliers[sid] for sid in sorted(self._suppliers)]
+
     def suppliers_for(self, product_id: str) -> list:
-        """Suppliers that sell the product, in the order they were added."""
-        return [s for s in self._suppliers.values() if s.supplies(product_id)]
+        """Suppliers that sell the product, sorted by supplier_id."""
+        return [s for s in self.list_all() if s.supplies(product_id)]
 
     @classmethod
-    def from_config(cls, config: dict) -> "SupplierRegistry":
-        """Build a registry from the suppliers list of a loaded config."""
+    def from_config(cls, supplier_dicts: list) -> "SupplierRegistry":
+        """Build a registry from the suppliers list of the config (cfg["suppliers"])."""
+        if not isinstance(supplier_dicts, list):
+            raise ValueError("suppliers must be a list of supplier entries")
         registry = cls()
-        for entry in config["suppliers"]:
+        for entry in supplier_dicts:
+            if not isinstance(entry, dict):
+                raise ValueError(f"each supplier entry must be a dict, got {entry!r}")
             registry.add(Supplier.from_dict(entry))
         return registry
