@@ -1,6 +1,8 @@
+import json
+
 import pytest
- 
-from src.suppliers import Supplier
+
+from src.suppliers import Supplier, SupplierRegistry
  
 S001 = {
     "supplier_id": "S-001",
@@ -77,4 +79,40 @@ def test_supplier_supplies_and_price_for():
     assert supplier.price_for("P-002") == 1350.0
     with pytest.raises(KeyError, match="P-003"):
         supplier.price_for("P-003")
- 
+
+
+def sample_config():
+    with open("data/sample_config.json", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_registry_add_and_get():
+    """TC-SUP-06: a supplier that was added can be fetched by its ID."""
+    registry = SupplierRegistry()
+    supplier = Supplier.from_dict(S001)
+    registry.add(supplier)
+    assert registry.get("S-001") is supplier
+
+
+def test_registry_duplicate_id_rejected():
+    """TC-SUP-07: adding a second supplier with the same ID raises ValueError."""
+    registry = SupplierRegistry()
+    registry.add(Supplier.from_dict(S001))
+    with pytest.raises(ValueError, match="S-001"):
+        registry.add(Supplier.from_dict(dict(S001, name="Another Trader")))
+
+
+def test_registry_unknown_id_rejected():
+    """TC-SUP-08: get with an unknown supplier ID raises KeyError."""
+    registry = SupplierRegistry()
+    with pytest.raises(KeyError, match="S-999"):
+        registry.get("S-999")
+
+
+def test_registry_from_config_and_suppliers_for():
+    """TC-SUP-09: from_config loads the sample suppliers; suppliers_for lists who sells each product."""
+    registry = SupplierRegistry.from_config(sample_config())
+    assert [s.supplier_id for s in registry.suppliers_for("P-001")] == ["S-001", "S-002"]
+    assert [s.supplier_id for s in registry.suppliers_for("P-002")] == ["S-001", "S-003"]
+    assert [s.supplier_id for s in registry.suppliers_for("P-003")] == ["S-002", "S-003"]
+    assert registry.suppliers_for("P-999") == []

@@ -93,4 +93,35 @@ class Supplier:
         if isinstance(values["prices"], dict):
             values["prices"] = dict(values["prices"])
         return cls(**values)
- 
+
+
+
+class SupplierRegistry:
+    """All suppliers in a scenario, looked up by ID or by product (SCM-F-011)."""
+
+    def __init__(self):
+        self._suppliers = {}
+
+    def add(self, supplier: Supplier) -> None:
+        """Add a supplier; ValueError if its ID is already registered."""
+        if supplier.supplier_id in self._suppliers:
+            raise ValueError(f"duplicate supplier_id '{supplier.supplier_id}'")
+        self._suppliers[supplier.supplier_id] = supplier
+
+    def get(self, supplier_id: str) -> Supplier:
+        """Return the supplier with this ID; KeyError if it is unknown."""
+        if supplier_id not in self._suppliers:
+            raise KeyError(f"unknown supplier_id '{supplier_id}'")
+        return self._suppliers[supplier_id]
+
+    def suppliers_for(self, product_id: str) -> list:
+        """Suppliers that sell the product, in the order they were added."""
+        return [s for s in self._suppliers.values() if s.supplies(product_id)]
+
+    @classmethod
+    def from_config(cls, config: dict) -> "SupplierRegistry":
+        """Build a registry from the suppliers list of a loaded config."""
+        registry = cls()
+        for entry in config["suppliers"]:
+            registry.add(Supplier.from_dict(entry))
+        return registry
