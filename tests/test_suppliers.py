@@ -23,10 +23,12 @@ def test_supplier_valid_creation():
     assert supplier.prices == {"P-001": 110.0, "P-002": 1350.0}
     assert supplier.reliability == 0.90
     assert supplier.max_order_qty == 500
-    assert supplier.distance_km == 350
-    assert supplier.transport_mode == "road"
-    extra = Supplier.from_dict(dict(S001, notes="main supplier"))
-    assert extra == supplier
+    assert not hasattr(supplier, "distance_km")
+    assert not hasattr(supplier, "transport_mode")
+    direct = Supplier("S-001", "Deccan Wholesale Traders", 3,
+                      {"P-001": 110.0, "P-002": 1350.0}, 0.90, 500)
+    assert direct == supplier
+    assert Supplier("S-009", "Free Sample Co", 1, {"P-001": 0}, 1.0, 10).price_for("P-001") == 0
  
  
 @pytest.mark.parametrize("bad_value", [0, -1, 2.5, True, "3"])
@@ -45,7 +47,6 @@ def test_supplier_invalid_reliability_rejected(bad_value):
  
 BAD_FIELDS = [
     ("prices", {}),
-    ("prices", {"P-001": 0}),
     ("prices", {"P-001": -5.0}),
     ("prices", {"P-001": "110"}),
     ("prices", {"P-001": float("inf")}),
@@ -53,14 +54,13 @@ BAD_FIELDS = [
     ("max_order_qty", 0),
     ("max_order_qty", 10.5),
     ("max_order_qty", True),
-    ("distance_km", -1),
     ("supplier_id", "  "),
-    ("transport_mode", ""),
+    ("name", ""),
 ]
  
  
 def test_supplier_invalid_prices_or_capacity_rejected():
-    """TC-SUP-04: bad prices, capacity, distance, blank text or a missing key raise ValueError naming the field."""
+    """TC-SUP-04: bad prices, capacity, blank text or a missing key raise ValueError naming the field."""
     for field, bad_value in BAD_FIELDS:
         with pytest.raises(ValueError, match=field):
             Supplier.from_dict(dict(S001, **{field: bad_value}))
@@ -70,11 +70,11 @@ def test_supplier_invalid_prices_or_capacity_rejected():
  
  
 def test_supplier_supplies_and_price_for():
-    """TC-SUP-05: supplies and price_for answer for sold products and reject others."""
+    """TC-SUP-05: supplies and price_for answer for sold products; an unsold product raises KeyError."""
     supplier = Supplier.from_dict(S001)
     assert supplier.supplies("P-001") is True
     assert supplier.supplies("P-003") is False
     assert supplier.price_for("P-002") == 1350.0
-    with pytest.raises(ValueError, match="P-003"):
+    with pytest.raises(KeyError, match="P-003"):
         supplier.price_for("P-003")
  
