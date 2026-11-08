@@ -1,6 +1,11 @@
 import pytest
 
-from src.products import COST_FIELDS, Product
+import json
+from pathlib import Path
+
+from src.products import COST_FIELDS, Product, ProductCatalog
+
+SAMPLE_CONFIG = Path(__file__).resolve().parent.parent / "data" / "sample_config.json"
 
 P001 = {
     "product_id": "P-001",
@@ -47,3 +52,69 @@ def test_product_from_dict_missing_key():
     data = {k: v for k, v in P001.items() if k != "order_cost"}
     with pytest.raises(ValueError, match="order_cost"):
         Product.from_dict(data)
+
+
+def make_product(product_id):
+    return Product.from_dict(dict(P001, product_id=product_id))
+
+
+def test_catalog_add_and_get():
+    """TC-PRD-05: an added product comes back from get and the length grows."""
+    catalog = ProductCatalog()
+    product = make_product("P-001")
+    catalog.add(product)
+    assert catalog.get("P-001") is product
+    assert len(catalog) == 1
+
+
+def test_catalog_duplicate_rejected():
+    """TC-PRD-06: adding the same product_id twice or a non-Product raises ValueError."""
+    catalog = ProductCatalog()
+    catalog.add(make_product("P-001"))
+    with pytest.raises(ValueError, match="P-001"):
+        catalog.add(make_product("P-001"))
+    with pytest.raises(ValueError):
+        catalog.add(P001)
+    assert len(catalog) == 1
+
+
+def test_catalog_unknown_id():
+    """TC-PRD-07: get and remove of an unknown product_id raise KeyError."""
+    catalog = ProductCatalog()
+    with pytest.raises(KeyError):
+        catalog.get("P-999")
+    with pytest.raises(KeyError):
+        catalog.remove("P-999")
+
+
+def test_catalog_remove():
+    """TC-PRD-08: after remove, the length drops by 1 and get raises KeyError."""
+    catalog = ProductCatalog()
+    catalog.add(make_product("P-001"))
+    catalog.add(make_product("P-002"))
+    catalog.remove("P-001")
+    assert len(catalog) == 1
+    with pytest.raises(KeyError):
+        catalog.get("P-001")
+
+
+def test_catalog_list_sorted():
+    """TC-PRD-09: products added as P-003, P-001, P-002 are listed P-001, P-002, P-003."""
+    catalog = ProductCatalog()
+    for product_id in ["P-003", "P-001", "P-002"]:
+        catalog.add(make_product(product_id))
+    assert [p.product_id for p in catalog.list_all()] == ["P-001", "P-002", "P-003"]
+
+
+def test_catalog_from_config():
+    """TC-PRD-10: the sample scenario's products build a catalog of 3; malformed input is rejected."""
+    config = json.loads(SAMPLE_CONFIG.read_text(encoding="utf-8"))
+    catalog = ProductCatalog.from_config(config["products"])
+    assert len(catalog) == 3
+    assert catalog.get("P-002").unit_cost == 1400.0
+    with pytest.raises(ValueError):
+        ProductCatalog.from_config({"product_id": "P-001"})
+    with pytest.raises(ValueError):
+        ProductCatalog.from_config(["P-001"])
+    with pytest.raises(ValueError):
+        ProductCatalog.from_config([P001, P001])
