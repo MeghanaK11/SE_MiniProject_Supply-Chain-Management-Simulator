@@ -107,3 +107,27 @@ class OrderBook:
     def all_orders(self) -> list:
         """Every order, oldest first."""
         return list(self._orders.values())
+
+    def allocate(self, product_id: str, available_qty: int) -> list:
+        """Give available_qty units to this product's open orders, oldest first (FIFO).
+
+        Each order gets as much as it still needs until the stock runs out.
+        Returns a list of (order_id, qty_shipped) in allocation order.
+        """
+        if not _is_int(available_qty) or available_qty < 0:
+            raise ValueError(
+                f"available_qty must be an integer of 0 or more, got {available_qty!r}"
+            )
+        allocations = []
+        for order in self.open_orders(product_id):
+            if available_qty == 0:
+                break
+            qty = min(order.remaining, available_qty)
+            order.apply_shipment(qty)
+            available_qty -= qty
+            allocations.append((order.order_id, qty))
+        return allocations
+
+    def backorder_qty(self, product_id: str) -> int:
+        """Units still owed on this product's open orders."""
+        return sum(order.remaining for order in self.open_orders(product_id))

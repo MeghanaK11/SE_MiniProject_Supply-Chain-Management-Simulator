@@ -113,3 +113,55 @@ def test_order_book_all_orders_oldest_first():
     b = book.create("P-002", 5, 1)
     b.apply_shipment(5)
     assert book.all_orders() == [a, b]
+
+
+def test_allocate_serves_oldest_orders_first():
+    """TC-ORD-14: stock goes to the oldest order first (by day, then order_id), the rest wait."""
+    book = OrderBook()
+    late = book.create("P-001", 6, 3)
+    early = book.create("P-001", 6, 1)
+    result = book.allocate("P-001", 8)
+    assert result == [(early.order_id, 6), (late.order_id, 2)]
+    assert early.status == FULFILLED
+    assert late.status == PARTIAL
+    assert late.remaining == 4
+
+
+def test_allocate_with_more_stock_than_demand():
+    """TC-ORD-15: with enough stock every order is fulfilled and the extra stock is not used."""
+    book = OrderBook()
+    a = book.create("P-001", 4, 1)
+    b = book.create("P-001", 3, 2)
+    result = book.allocate("P-001", 100)
+    assert result == [(a.order_id, 4), (b.order_id, 3)]
+    assert sum(qty for _, qty in result) == 7
+    assert a.status == FULFILLED and b.status == FULFILLED
+    assert book.open_orders("P-001") == []
+
+
+def test_backorder_qty_sums_remaining_per_product():
+    """TC-ORD-16: backorder_qty adds up units still owed for one product only."""
+    book = OrderBook()
+    book.create("P-001", 10, 1)
+    book.create("P-001", 5, 2)
+    book.create("P-002", 7, 1)
+    assert book.backorder_qty("P-001") == 15
+    book.allocate("P-001", 12)
+    assert book.backorder_qty("P-001") == 3
+    assert book.backorder_qty("P-002") == 7
+    assert book.backorder_qty("P-999") == 0
+
+
+@pytest.mark.parametrize("bad_qty", [-1, 2.5, True, None])
+def test_allocate_rejects_bad_stock_and_zero_changes_nothing(bad_qty):
+    """TC-ORD-17: invalid stock raises ValueError and changes nothing; zero stock allocates nothing."""
+    book = OrderBook()
+    order = book.create("P-001", 5, 1)
+    other = book.create("P-002", 5, 1)
+    with pytest.raises(ValueError):
+        book.allocate("P-001", bad_qty)
+    assert book.allocate("P-001", 0) == []
+    book.allocate("P-001", 5)
+    assert order.status == FULFILLED
+    assert other.status == PENDING
+    assert order.fulfilled_qty == 5
