@@ -1,8 +1,4 @@
-"""Customer orders for the supply chain simulator (SCM-F-021).
-
-The order book and FIFO allocation (SCM-F-022, SCM-F-023) are added to this
-module in later backlog items.
-"""
+"""Customer orders, the order book and FIFO allocation (SCM-F-021, SCM-F-022, SCM-F-023)."""
 from dataclasses import dataclass
 
 PENDING = "PENDING"
@@ -68,7 +64,7 @@ class CustomerOrder:
             )
         self.fulfilled_qty += qty
         self.status = _status_for(self.fulfilled_qty, self.quantity)
-    
+
 
 class OrderBook:
     """All customer orders, numbered CO-0001, CO-0002, ... and kept oldest first (SCM-F-022)."""
@@ -108,25 +104,25 @@ class OrderBook:
         """Every order, oldest first."""
         return list(self._orders.values())
 
-    def allocate(self, product_id: str, available_qty: int) -> list:
+    def allocate(self, product_id: str, available_qty: int) -> int:
         """Give available_qty units to this product's open orders, oldest first (FIFO).
 
         Each order gets as much as it still needs until the stock runs out.
-        Returns a list of (order_id, qty_shipped) in allocation order.
+        Returns the total number of units allocated.
         """
         if not _is_int(available_qty) or available_qty < 0:
             raise ValueError(
                 f"available_qty must be an integer of 0 or more, got {available_qty!r}"
             )
-        allocations = []
+        allocated = 0
         for order in self.open_orders(product_id):
             if available_qty == 0:
                 break
             qty = min(order.remaining, available_qty)
             order.apply_shipment(qty)
             available_qty -= qty
-            allocations.append((order.order_id, qty))
-        return allocations
+            allocated += qty
+        return allocated
 
     def backorder_qty(self, product_id: str) -> int:
         """Units still owed on this product's open orders."""

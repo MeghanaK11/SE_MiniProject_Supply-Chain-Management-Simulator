@@ -104,7 +104,6 @@ def test_order_book_open_orders_excludes_fulfilled():
     assert book.open_orders("P-003") == [early, late]
 
 
-
 def test_order_book_all_orders_oldest_first():
     """TC-ORD-13: all_orders returns every order, fulfilled or not, oldest first."""
     book = OrderBook()
@@ -116,25 +115,30 @@ def test_order_book_all_orders_oldest_first():
 
 
 def test_allocate_serves_oldest_orders_first():
-    """TC-ORD-14: stock goes to the oldest order first (by day, then order_id), the rest wait."""
+    """TC-ORD-14: orders of 5 (day 1) and 5 (day 2), allocate 7 fills the first and part of the second."""
     book = OrderBook()
-    late = book.create("P-001", 6, 3)
-    early = book.create("P-001", 6, 1)
-    result = book.allocate("P-001", 8)
-    assert result == [(early.order_id, 6), (late.order_id, 2)]
+    first = book.create("P-001", 5, 1)
+    second = book.create("P-001", 5, 2)
+    assert book.allocate("P-001", 7) == 7
+    assert first.status == FULFILLED
+    assert second.status == PARTIAL
+    assert second.fulfilled_qty == 2
+    assert book.backorder_qty("P-001") == 3
+    # day order beats creation order: a day-3 order created first is served second
+    other = OrderBook()
+    late = other.create("P-001", 6, 3)
+    early = other.create("P-001", 6, 1)
+    assert other.allocate("P-001", 8) == 8
     assert early.status == FULFILLED
-    assert late.status == PARTIAL
-    assert late.remaining == 4
+    assert late.fulfilled_qty == 2
 
 
 def test_allocate_with_more_stock_than_demand():
-    """TC-ORD-15: with enough stock every order is fulfilled and the extra stock is not used."""
+    """TC-ORD-15: with enough stock every order is fulfilled and only the demand is allocated."""
     book = OrderBook()
     a = book.create("P-001", 4, 1)
     b = book.create("P-001", 3, 2)
-    result = book.allocate("P-001", 100)
-    assert result == [(a.order_id, 4), (b.order_id, 3)]
-    assert sum(qty for _, qty in result) == 7
+    assert book.allocate("P-001", 100) == 7
     assert a.status == FULFILLED and b.status == FULFILLED
     assert book.open_orders("P-001") == []
 
@@ -154,14 +158,14 @@ def test_backorder_qty_sums_remaining_per_product():
 
 @pytest.mark.parametrize("bad_qty", [-1, 2.5, True, None])
 def test_allocate_rejects_bad_stock_and_zero_changes_nothing(bad_qty):
-    """TC-ORD-17: invalid stock raises ValueError and changes nothing; zero stock allocates nothing."""
+    """TC-ORD-17: invalid stock raises ValueError and changes nothing; zero stock allocates 0."""
     book = OrderBook()
     order = book.create("P-001", 5, 1)
     other = book.create("P-002", 5, 1)
     with pytest.raises(ValueError):
         book.allocate("P-001", bad_qty)
-    assert book.allocate("P-001", 0) == []
-    book.allocate("P-001", 5)
+    assert order.fulfilled_qty == 0
+    assert book.allocate("P-001", 0) == 0
+    assert book.allocate("P-001", 5) == 5
     assert order.status == FULFILLED
     assert other.status == PENDING
-    assert order.fulfilled_qty == 5
