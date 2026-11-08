@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
-
+ 
 import pytest
-
-from src.suppliers import Supplier, SupplierRegistry
-
+ 
+from src.suppliers import Supplier, SupplierRegistry, _balanced_score, select_supplier
+ 
 SAMPLE_CONFIG = Path(__file__).resolve().parent.parent / "data" / "sample_config.json"
  
 S001 = {
@@ -82,17 +82,17 @@ def test_supplier_supplies_and_price_for():
     assert supplier.price_for("P-002") == 1350.0
     with pytest.raises(KeyError, match="P-003"):
         supplier.price_for("P-003")
-
-
+ 
+ 
 def sample_config():
     with open(SAMPLE_CONFIG, encoding="utf-8") as f:
         return json.load(f)
-
-
+ 
+ 
 S003 = dict(S001, supplier_id="S-003", name="Northern Rail Supplies",
             prices={"P-002": 1280.0, "P-003": 600.0})
-
-
+ 
+ 
 def test_registry_add_get_and_list_all():
     """TC-SUP-06: added suppliers can be fetched by ID; list_all returns them sorted by ID."""
     registry = SupplierRegistry()
@@ -104,22 +104,24 @@ def test_registry_add_get_and_list_all():
     assert registry.get("S-003") is s003
     assert registry.list_all() == [s001, s003]
     assert SupplierRegistry().list_all() == []
-
-
+ 
+ 
 @pytest.mark.parametrize("bad_input", [{"S-001": S001}, None, [S001, "S-002"], [S001, S001]])
 def test_registry_invalid_input_rejected(bad_input):
-    """TC-SUP-07: a duplicate ID, a suppliers value that is not a list, or an entry that is not a dict raises ValueError."""
+    """TC-SUP-07: a duplicate ID, a suppliers value that is not a list, an entry that is not a dict, or adding a non-Supplier raises ValueError."""
     with pytest.raises(ValueError):
         SupplierRegistry.from_config(bad_input)
-
-
+    with pytest.raises(ValueError):
+        SupplierRegistry().add("S-001")
+ 
+ 
 def test_registry_unknown_id_rejected():
     """TC-SUP-08: get with an unknown supplier ID raises KeyError."""
     registry = SupplierRegistry()
-    with pytest.raises(ValueError):
-        SupplierRegistry().add("S-001")
-
-
+    with pytest.raises(KeyError, match="S-999"):
+        registry.get("S-999")
+ 
+ 
 def test_registry_from_config_and_suppliers_for():
     """TC-SUP-09: from_config loads cfg["suppliers"]; suppliers_for lists who sells each product, sorted by ID."""
     registry = SupplierRegistry.from_config(sample_config()["suppliers"])
@@ -129,3 +131,51 @@ def test_registry_from_config_and_suppliers_for():
     assert registry.suppliers_for("P-999") == []
     reversed_order = SupplierRegistry.from_config([S003, S001])
     assert [s.supplier_id for s in reversed_order.suppliers_for("P-002")] == ["S-001", "S-003"]
+ 
+ 
+def sample_suppliers():
+    return SupplierRegistry.from_config(sample_config()["suppliers"]).list_all()
+ 
+ 
+def test_select_cheapest():
+    """TC-SUP-10: P-001 between S-001 (110) and S-002 (125) gives S-001."""
+    assert select_supplier(sample_suppliers(), "P-001", "cheapest").supplier_id == "S-001"
+ 
+ 
+def test_select_fastest():
+    """TC-SUP-11: P-001 gives S-002 (1 day lead time)."""
+    assert select_supplier(sample_suppliers(), "P-001", "fastest").supplier_id == "S-002"
+ 
+ 
+def test_select_balanced():
+    """TC-SUP-12: P-001: S-001 scores 0.76, S-002 scores 0.606, so S-002."""
+    suppliers = sample_suppliers()
+    sellers = [s for s in suppliers if s.supplies("P-001")]
+    by_id = {s.supplier_id: s for s in sellers}
+    assert _balanced_score(by_id["S-001"], sellers, "P-001", (0.5, 0.3, 0.2)) == pytest.approx(0.76)
+    assert _balanced_score(by_id["S-002"], sellers, "P-001", (0.5, 0.3, 0.2)) == pytest.approx(0.606)
+    assert select_supplier(suppliers, "P-001").supplier_id == "S-002"
+    assert select_supplier(suppliers, "P-001", "balanced").supplier_id == "S-002"
+ 
+ 
+def test_select_no_supplier():
+    """TC-SUP-13: P-999, which nobody sells, raises ValueError (also with no candidates)."""
+    with pytest.raises(ValueError, match="P-999"):
+        select_supplier(sample_suppliers(), "P-999", "cheapest")
+    with pytest.raises(ValueError):
+        select_supplier([], "P-001")
+ 
+ 
+def test_select_unknown_strategy():
+    """TC-SUP-14: strategy "random" raises ValueError."""
+    with pytest.raises(ValueError, match="random"):
+        select_supplier(sample_suppliers(), "P-001", "random")
+ 
+ 
+@pytest.mark.parametrize("strategy", ["cheapest", "fastest", "balanced"])
+def test_select_tie_breaks_by_id(strategy):
+    """TC-SUP-15: two identical suppliers S-005 and S-004 give S-004, whatever the order."""
+    s005 = Supplier.from_dict(dict(S001, supplier_id="S-005"))
+    s004 = Supplier.from_dict(dict(S001, supplier_id="S-004"))
+    assert select_supplier([s005, s004], "P-001", strategy).supplier_id == "S-004"
+ 

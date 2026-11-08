@@ -1,10 +1,12 @@
 """Suppliers for the supply chain simulator (SCM-F-010).
  
-The supplier registry (SCM-F-011) and supplier selection (SCM-F-012) are added
-to this module in later backlog items.
+Also holds the supplier registry (SCM-F-011) and supplier selection
+strategies (SCM-F-012).
 """
 import math
 from dataclasses import dataclass
+ 
+STRATEGIES = ("cheapest", "fastest", "balanced")
  
 REQUIRED_KEYS = (
     "supplier_id",
@@ -93,15 +95,14 @@ class Supplier:
         if isinstance(values["prices"], dict):
             values["prices"] = dict(values["prices"])
         return cls(**values)
-
-
-
+ 
+ 
 class SupplierRegistry:
     """All suppliers in a scenario, looked up by ID or by product (SCM-F-011)."""
-
+ 
     def __init__(self):
         self._suppliers = {}
-
+ 
     def add(self, supplier: Supplier) -> None:
         """Add a supplier; ValueError if it is not a Supplier or its ID is already registered."""
         if not isinstance(supplier, Supplier):
@@ -109,21 +110,21 @@ class SupplierRegistry:
         if supplier.supplier_id in self._suppliers:
             raise ValueError(f"duplicate supplier_id '{supplier.supplier_id}'")
         self._suppliers[supplier.supplier_id] = supplier
-
+ 
     def get(self, supplier_id: str) -> Supplier:
         """Return the supplier with this ID; KeyError if it is unknown."""
         if supplier_id not in self._suppliers:
             raise KeyError(f"unknown supplier_id '{supplier_id}'")
         return self._suppliers[supplier_id]
-
+ 
     def list_all(self) -> list:
         """All suppliers, sorted by supplier_id."""
         return [self._suppliers[sid] for sid in sorted(self._suppliers)]
-
+ 
     def suppliers_for(self, product_id: str) -> list:
         """Suppliers that sell the product, sorted by supplier_id."""
         return [s for s in self.list_all() if s.supplies(product_id)]
-
+ 
     @classmethod
     def from_config(cls, supplier_dicts: list) -> "SupplierRegistry":
         """Build a registry from the suppliers list of the config (cfg["suppliers"])."""
@@ -135,3 +136,42 @@ class SupplierRegistry:
                 raise ValueError(f"each supplier entry must be a dict, got {entry!r}")
             registry.add(Supplier.from_dict(entry))
         return registry
+ 
+ 
+ 
+def _balanced_score(supplier: Supplier, sellers: list, product_id: str,
+                    weights: tuple) -> float:
+    """w1 x (price / highest price) + w2 x (lead time / longest lead time) + w3 x (1 - reliability)."""
+    w1, w2, w3 = weights
+    highest_price = max(s.price_for(product_id) for s in sellers)
+    longest_lead = max(s.lead_time_days for s in sellers)
+    price_part = supplier.price_for(product_id) / highest_price if highest_price else 0.0
+    lead_part = supplier.lead_time_days / longest_lead
+    return w1 * price_part + w2 * lead_part + w3 * (1 - supplier.reliability)
+ 
+ 
+def select_supplier(candidates: list, product_id: str,
+                    strategy: str = "balanced",
+                    weights: tuple = (0.5, 0.3, 0.2)) -> Supplier:
+    """Pick one supplier for the product (SCM-F-012).
+ 
+    cheapest: lowest price. fastest: lowest lead time. balanced: lowest
+    balanced score. Only suppliers that sell the product are compared, and
+    ties go to the smaller supplier_id.
+    """
+    if strategy not in STRATEGIES:
+        raise ValueError(f"unknown strategy '{strategy}', expected one of {STRATEGIES}")
+    sellers = [s for s in candidates if s.supplies(product_id)]
+    if not sellers:
+        raise ValueError(f"no supplier sells {product_id}")
+    if strategy == "cheapest":
+        def score(s):
+            return s.price_for(product_id)
+    elif strategy == "fastest":
+        def score(s):
+            return s.lead_time_days
+    else:
+        def score(s):
+            return _balanced_score(s, sellers, product_id, weights)
+    return min(sellers, key=lambda s: (score(s), s.supplier_id))
+ 
