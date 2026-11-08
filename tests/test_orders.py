@@ -1,6 +1,6 @@
 import pytest
 
-from src.orders import CustomerOrder, FULFILLED, PARTIAL, PENDING
+from src.orders import CustomerOrder, FULFILLED, OrderBook, PARTIAL, PENDING
 
 
 def make_order(**overrides):
@@ -64,3 +64,46 @@ def test_overshipment_rejected(bad_qty):
         order.apply_shipment(bad_qty)
     assert order.fulfilled_qty == 0
     assert order.status == PENDING
+def test_order_book_numbers_orders_in_sequence():
+    """TC-ORD-10: create numbers orders CO-0001, CO-0002, ... and returns the new order."""
+    book = OrderBook()
+    first = book.create("P-001", 10, 1)
+    second = book.create("P-002", 5, 1)
+    assert first.order_id == "CO-0001"
+    assert second.order_id == "CO-0002"
+    assert first.status == PENDING
+    with pytest.raises(ValueError):
+        book.create("P-001", 0, 1)
+    assert len(book.all_orders()) == 2
+    assert book.create("P-003", 4, 1).order_id == "CO-0003"
+
+
+def test_order_book_get_and_unknown_id():
+    """TC-ORD-11: get returns the stored order; an unknown ID raises KeyError."""
+    book = OrderBook()
+    order = book.create("P-001", 10, 1)
+    assert book.get("CO-0001") is order
+    with pytest.raises(KeyError, match="CO-9999"):
+        book.get("CO-9999")
+
+
+def test_order_book_open_orders_excludes_fulfilled():
+    """TC-ORD-12: open_orders lists unfulfilled orders oldest first and can filter by product."""
+    book = OrderBook()
+    a = book.create("P-001", 10, 1)
+    b = book.create("P-002", 5, 1)
+    c = book.create("P-001", 3, 2)
+    b.apply_shipment(5)
+    assert book.open_orders() == [a, c]
+    assert book.open_orders("P-001") == [a, c]
+    assert book.open_orders("P-002") == []
+
+
+def test_order_book_all_orders_oldest_first():
+    """TC-ORD-13: all_orders returns every order, fulfilled or not, oldest first."""
+    book = OrderBook()
+    assert book.all_orders() == []
+    a = book.create("P-001", 10, 1)
+    b = book.create("P-002", 5, 1)
+    b.apply_shipment(5)
+    assert book.all_orders() == [a, b]

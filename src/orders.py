@@ -68,3 +68,38 @@ class CustomerOrder:
             )
         self.fulfilled_qty += qty
         self.status = _status_for(self.fulfilled_qty, self.quantity)
+
+class OrderBook:
+    """All customer orders, numbered CO-0001, CO-0002, ... and kept oldest first (SCM-F-022)."""
+
+    def __init__(self):
+        self._orders = {}  # dicts keep insertion order, so this is oldest first
+
+    def create(self, product_id: str, quantity: int, day: int) -> CustomerOrder:
+        """Create the next numbered order, store it and return it."""
+        order = CustomerOrder(
+            order_id=f"CO-{len(self._orders) + 1:04d}",
+            product_id=product_id,
+            quantity=quantity,
+            day=day,
+        )
+        self._orders[order.order_id] = order
+        return order
+
+    def get(self, order_id: str) -> CustomerOrder:
+        """Return the order with this ID; KeyError if it is unknown."""
+        if order_id not in self._orders:
+            raise KeyError(f"unknown order_id '{order_id}'")
+        return self._orders[order_id]
+
+    def open_orders(self, product_id: str = None) -> list:
+        """Orders not yet fulfilled, oldest first; optionally only for one product."""
+        return [
+            order for order in self._orders.values()
+            if order.status != FULFILLED
+            and (product_id is None or order.product_id == product_id)
+        ]
+
+    def all_orders(self) -> list:
+        """Every order, oldest first."""
+        return list(self._orders.values())
