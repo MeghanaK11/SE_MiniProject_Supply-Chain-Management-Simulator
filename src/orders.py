@@ -1,8 +1,4 @@
-"""Customer orders for the supply chain simulator (SCM-F-021).
-
-The order book and FIFO allocation (SCM-F-022, SCM-F-023) are added to this
-module in later backlog items.
-"""
+"""Customer orders, the order book and FIFO allocation (SCM-F-021, SCM-F-022, SCM-F-023)."""
 from dataclasses import dataclass
 
 PENDING = "PENDING"
@@ -68,3 +64,66 @@ class CustomerOrder:
             )
         self.fulfilled_qty += qty
         self.status = _status_for(self.fulfilled_qty, self.quantity)
+
+
+class OrderBook:
+    """All customer orders, numbered CO-0001, CO-0002, ... and kept oldest first (SCM-F-022)."""
+
+    def __init__(self):
+        self._orders = {}  # dicts keep insertion order, so this is oldest first
+
+    def create(self, product_id: str, quantity: int, day: int) -> CustomerOrder:
+        """Create the next numbered order, store it and return it."""
+        order = CustomerOrder(
+            order_id=f"CO-{len(self._orders) + 1:04d}",
+            product_id=product_id,
+            quantity=quantity,
+            day=day,
+        )
+        self._orders[order.order_id] = order
+        return order
+
+    def get(self, order_id: str) -> CustomerOrder:
+        """Return the order with this ID; KeyError if it is unknown."""
+        if order_id not in self._orders:
+            raise KeyError(f"unknown order_id '{order_id}'")
+        return self._orders[order_id]
+
+    def open_orders(self, product_id: str = None) -> list:
+        """Orders not yet fulfilled, oldest first by day then order_id; optionally one product only."""
+        return sorted(
+            (
+                order for order in self._orders.values()
+                if order.status != FULFILLED
+                and (product_id is None or order.product_id == product_id)
+            ),
+            key=lambda o: (o.day, o.order_id),
+        )
+
+    def all_orders(self) -> list:
+        """Every order, oldest first."""
+        return list(self._orders.values())
+
+    def allocate(self, product_id: str, available_qty: int) -> int:
+        """Give available_qty units to this product's open orders, oldest first (FIFO).
+
+        Each order gets as much as it still needs until the stock runs out.
+        Returns the total number of units allocated.
+        """
+        if not _is_int(available_qty) or available_qty < 0:
+            raise ValueError(
+                f"available_qty must be an integer of 0 or more, got {available_qty!r}"
+            )
+        allocated = 0
+        for order in self.open_orders(product_id):
+            if available_qty == 0:
+                break
+            qty = min(order.remaining, available_qty)
+            order.apply_shipment(qty)
+            available_qty -= qty
+            allocated += qty
+        return allocated
+
+    def backorder_qty(self, product_id: str) -> int:
+        """Units still owed on this product's open orders."""
+        return sum(order.remaining for order in self.open_orders(product_id))
