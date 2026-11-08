@@ -46,6 +46,42 @@ def _duplicate_first(section):
     return mutate
 
 
+def _stock(value):
+    def mutate(cfg):
+        cfg["warehouse"]["initial_stock"]["P-001"] = value
+    return mutate
+
+
+def _price(value):
+    def mutate(cfg):
+        cfg["suppliers"][0]["prices"]["P-001"] = value
+    return mutate
+
+
+def _demand(**changes):
+    """Change the P-001 demand entry; a value of None removes that key."""
+    def mutate(cfg):
+        entry = cfg["demand"]["P-001"]
+        for key, value in changes.items():
+            if value is None:
+                entry.pop(key, None)
+            else:
+                entry[key] = value
+    return mutate
+
+
+def _demand_entry(value):
+    def mutate(cfg):
+        cfg["demand"]["P-001"] = value
+    return mutate
+
+
+def _mode_rate(value):
+    def mutate(cfg):
+        cfg["transport_modes"]["road"] = value
+    return mutate
+
+
 MALFORMED = [
     *[(f"missing {s}", _drop(s), s) for s in REQUIRED_SECTIONS],
     ("products not a list", _set("products", {"P-001": {}}), "products"),
@@ -56,13 +92,43 @@ MALFORMED = [
     ("duplicate product", _duplicate_first("products"), "duplicate product_id"),
     ("duplicate supplier", _duplicate_first("suppliers"), "duplicate supplier_id"),
     ("initial_stock not an object", lambda cfg: cfg["warehouse"].update(initial_stock=["P-001"]), "initial_stock"),
+    ("initial_stock negative", _stock(-5), "initial_stock"),
+    ("initial_stock fraction", _stock(2.5), "initial_stock"),
+    ("initial_stock bool", _stock(True), "initial_stock"),
+    ("initial_stock text", _stock("120"), "initial_stock"),
+    ("initial_stock list", _stock([120]), "initial_stock"),
     ("supplier without prices", lambda cfg: cfg["suppliers"][0].update(prices={}), "prices"),
+    ("supplier prices a list", lambda cfg: cfg["suppliers"][0].update(prices=["P-001", 110.0]), "prices"),
+    ("price negative", _price(-1.0), "price for 'P-001'"),
+    ("price text", _price("110"), "price for 'P-001'"),
+    ("price bool", _price(True), "price for 'P-001'"),
+    ("price NaN", _price(float("nan")), "price for 'P-001'"),
+    ("price infinite", _price(float("inf")), "price for 'P-001'"),
+    ("price object", _price({"amount": 110}), "price for 'P-001'"),
+    ("demand entry not an object", _demand_entry(20), "demand for 'P-001'"),
+    ("demand entry a list", _demand_entry(["uniform", 20]), "demand for 'P-001'"),
+    ("demand without pattern", _demand(pattern=None), "pattern"),
+    ("demand unknown pattern", _demand(pattern="random"), "pattern"),
+    ("demand pattern a list", _demand(pattern=["uniform"]), "pattern"),
+    ("demand without base", _demand(base=None), "base"),
+    ("demand base negative", _demand(base=-1), "base"),
+    ("demand base fraction", _demand(base=2.5), "base"),
+    ("demand base text", _demand(base="20"), "base"),
+    ("demand spread negative", _demand(spread=-1), "spread"),
+    ("demand spread bool", _demand(spread=True), "spread"),
+    ("demand period zero", _demand(pattern="seasonal", period=0), "period"),
+    ("demand amplitude text", _demand(pattern="seasonal", amplitude="3"), "amplitude"),
+    ("demand amplitude infinite", _demand(pattern="seasonal", amplitude=float("inf")), "amplitude"),
+    ("transport mode not an object", _mode_rate(0.02), "cost_per_unit_km"),
+    ("transport mode without rate", _mode_rate({}), "cost_per_unit_km"),
+    ("transport mode rate negative", _mode_rate({"cost_per_unit_km": -0.01}), "cost_per_unit_km"),
+    ("transport mode rate text", _mode_rate({"cost_per_unit_km": "0.02"}), "cost_per_unit_km"),
 ]
 
 
 @pytest.mark.parametrize("label, mutate, expected", MALFORMED, ids=[m[0] for m in MALFORMED])
 def test_missing_section(sample, label, mutate, expected):
-    """TC-CFG-02: a missing, wrongly typed or malformed section raises ValueError naming it."""
+    """TC-CFG-02: a missing, wrongly typed or malformed section or value raises ValueError naming it."""
     cfg = copy.deepcopy(sample)
     mutate(cfg)
     with pytest.raises(ValueError, match=expected):
@@ -81,24 +147,25 @@ def test_invalid_json(tmp_path):
         load_config(str(tmp_path / "missing.json"))
 
 
-@pytest.mark.parametrize("where", ["demand", "initial_stock", "supplier_prices", "transport_mode", "no_demand"])
-def test_unknown_product_in_demand(sample, tmp_path, where):
-    """TC-CFG-04: a reference to an unknown product or transport mode, or a product with no demand, is rejected."""
-    if where == "demand":
-        sample["demand"]["P-999"] = {"pattern": "constant", "base": 1}
-        expected = "P-999"
-    elif where == "initial_stock":
-        sample["warehouse"]["initial_stock"]["P-999"] = 5
-        expected = "P-999"
-    elif where == "supplier_prices":
-        sample["suppliers"][0]["prices"]["P-999"] = 10.0
-        expected = "P-999"
-    elif where == "transport_mode":
-        sample["suppliers"][0]["transport_mode"] = "sea"
-        expected = "sea"
-    else:
-        del sample["demand"]["P-003"]
-        expected = "P-003"
+BAD_REFERENCES = [
+    ("demand", lambda cfg: cfg["demand"].update({"P-999": {"pattern": "constant", "base": 1}}), "P-999"),
+    ("initial_stock", lambda cfg: cfg["warehouse"]["initial_stock"].update({"P-999": 5}), "P-999"),
+    ("supplier_prices", lambda cfg: cfg["suppliers"][0]["prices"].update({"P-999": 10.0}), "P-999"),
+    ("no_demand", lambda cfg: cfg["demand"].pop("P-003"), "P-003"),
+    ("transport_mode unknown", lambda cfg: cfg["suppliers"][0].update(transport_mode="sea"), "sea"),
+    ("transport_mode list", lambda cfg: cfg["suppliers"][0].update(transport_mode=["road"]), "transport_mode"),
+    ("transport_mode integer", lambda cfg: cfg["suppliers"][0].update(transport_mode=1), "transport_mode"),
+    ("transport_mode object", lambda cfg: cfg["suppliers"][0].update(transport_mode={"road": 1}), "transport_mode"),
+    ("transport_mode null", lambda cfg: cfg["suppliers"][0].update(transport_mode=None), "transport_mode"),
+    ("transport_mode blank", lambda cfg: cfg["suppliers"][0].update(transport_mode=" "), "transport_mode"),
+    ("transport_mode missing", lambda cfg: cfg["suppliers"][0].pop("transport_mode"), "transport_mode"),
+]
+
+
+@pytest.mark.parametrize("label, mutate, expected", BAD_REFERENCES, ids=[b[0] for b in BAD_REFERENCES])
+def test_unknown_product_in_demand(sample, tmp_path, label, mutate, expected):
+    """TC-CFG-04: a reference to an unknown product, a transport mode that is unknown, missing or not a string, or a product with no demand, raises ValueError."""
+    mutate(sample)
     with pytest.raises(ValueError, match=expected):
         load_config(write(tmp_path, sample))
 
