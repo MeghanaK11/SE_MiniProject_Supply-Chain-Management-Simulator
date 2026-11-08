@@ -68,6 +68,7 @@ class CustomerOrder:
             )
         self.fulfilled_qty += qty
         self.status = _status_for(self.fulfilled_qty, self.quantity)
+    
 
 class OrderBook:
     """All customer orders, numbered CO-0001, CO-0002, ... and kept oldest first (SCM-F-022)."""
@@ -93,12 +94,15 @@ class OrderBook:
         return self._orders[order_id]
 
     def open_orders(self, product_id: str = None) -> list:
-        """Orders not yet fulfilled, oldest first; optionally only for one product."""
-        return [
-            order for order in self._orders.values()
-            if order.status != FULFILLED
-            and (product_id is None or order.product_id == product_id)
-        ]
+        """Orders not yet fulfilled, oldest first by day then order_id; optionally one product only."""
+        return sorted(
+            (
+                order for order in self._orders.values()
+                if order.status != FULFILLED
+                and (product_id is None or order.product_id == product_id)
+            ),
+            key=lambda o: (o.day, o.order_id),
+        )
 
     def all_orders(self) -> list:
         """Every order, oldest first."""

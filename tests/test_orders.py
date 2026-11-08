@@ -64,6 +64,8 @@ def test_overshipment_rejected(bad_qty):
         order.apply_shipment(bad_qty)
     assert order.fulfilled_qty == 0
     assert order.status == PENDING
+
+
 def test_order_book_numbers_orders_in_sequence():
     """TC-ORD-10: create numbers orders CO-0001, CO-0002, ... and returns the new order."""
     book = OrderBook()
@@ -97,6 +99,10 @@ def test_order_book_open_orders_excludes_fulfilled():
     assert book.open_orders() == [a, c]
     assert book.open_orders("P-001") == [a, c]
     assert book.open_orders("P-002") == []
+    late = book.create("P-003", 2, 3)
+    early = book.create("P-003", 2, 1)
+    assert book.open_orders("P-003") == [early, late]
+
 
 
 def test_order_book_all_orders_oldest_first():
