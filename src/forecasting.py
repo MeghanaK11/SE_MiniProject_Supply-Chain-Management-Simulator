@@ -1,7 +1,7 @@
-"""Demand forecasting for the supply chain simulator (SCM-F-024).
+"""Demand forecasting for the supply chain simulator (SCM-F-024, SCM-F-025).
 
-Exponential smoothing and forecast error measures (SCM-F-025) are added to
-this module in a later backlog item.
+Moving average and demand standard deviation (SCM-F-024), plus exponential
+smoothing and the MAE and MAPE forecast error measures (SCM-F-025).
 """
 import math
 import statistics
@@ -43,15 +43,15 @@ def demand_std(history, window: int) -> float:
 
 
 
-
-def _check_series(actual: list, forecast: list) -> None:
-    """ValueError unless actual and forecast are non-empty and the same length."""
-    if not actual or not forecast:
-        raise ValueError("actual and forecast must not be empty")
-    if len(actual) != len(forecast):
+def _check_series(actual: list, forecast: list) -> tuple:
+    """Validate both series with _check_history and require the same length."""
+    actual_values = _check_history(actual)
+    forecast_values = _check_history(forecast)
+    if len(actual_values) != len(forecast_values):
         raise ValueError(
-            f"actual and forecast must be the same length, got {len(actual)} and {len(forecast)}"
+            f"actual and forecast must be the same length, got {len(actual_values)} and {len(forecast_values)}"
         )
+    return actual_values, forecast_values
 
 
 def exponential_smoothing(history: list, alpha: float) -> float:
@@ -63,23 +63,22 @@ def exponential_smoothing(history: list, alpha: float) -> float:
     if (isinstance(alpha, bool) or not isinstance(alpha, (int, float))
             or not 0 < alpha <= 1):
         raise ValueError(f"alpha must be above 0 and at most 1, got {alpha!r}")
-    if not history:
-        raise ValueError("history must not be empty")
-    forecast = history[0]
-    for actual in history:
+    values = _check_history(history)
+    forecast = values[0]
+    for actual in values:
         forecast = alpha * actual + (1 - alpha) * forecast
     return forecast
 
 
 def mean_absolute_error(actual: list, forecast: list) -> float:
     """Average of |actual - forecast| over all periods."""
-    _check_series(actual, forecast)
+    actual, forecast = _check_series(actual, forecast)
     return sum(abs(a - f) for a, f in zip(actual, forecast)) / len(actual)
 
 
 def mean_absolute_percentage_error(actual: list, forecast: list) -> float:
     """Average of |actual - forecast| / actual, in percent; periods where actual is 0 are skipped."""
-    _check_series(actual, forecast)
+    actual, forecast = _check_series(actual, forecast)
     pairs = [(a, f) for a, f in zip(actual, forecast) if a != 0]
     if not pairs:
         raise ValueError("MAPE needs at least one period where actual is not 0")

@@ -61,11 +61,12 @@ def test_exponential_smoothing_known_value():
 
 @pytest.mark.parametrize("bad_alpha", [0, 1.5, -0.2, True, "0.5"])
 def test_exponential_smoothing_invalid_alpha(bad_alpha):
-    """TC-FC-07: alpha 0 and 1.5 (and other values outside 0 < alpha <= 1) raise ValueError; so does empty history."""
+    """TC-FC-07: alpha 0 and 1.5 (and other values outside 0 < alpha <= 1) raise ValueError; so do empty or bad histories."""
     with pytest.raises(ValueError, match="alpha"):
         exponential_smoothing([10, 20, 30], bad_alpha)
-    with pytest.raises(ValueError, match="history"):
-        exponential_smoothing([], 0.5)
+    for bad_history in ([], [10, "20"], [10, float("nan")], [True, 5], [10, float("inf")]):
+        with pytest.raises(ValueError, match="history"):
+            exponential_smoothing(bad_history, 0.5)
 
 
 def test_mae():
@@ -83,8 +84,11 @@ def test_mape():
 
 @pytest.mark.parametrize("func", [mean_absolute_error, mean_absolute_percentage_error])
 def test_error_length_mismatch(func):
-    """TC-FC-10: lengths 2 and 3 raise ValueError; so do empty lists."""
+    """TC-FC-10: lengths 2 and 3 raise ValueError; so do empty lists and NaN, text or bool values."""
     with pytest.raises(ValueError, match="same length"):
         func([10, 20], [10, 20, 30])
     with pytest.raises(ValueError, match="empty"):
         func([], [])
+    for actual, forecast in (([10, float("nan")], [1, 2]), ([10, 20], [12, "18"]), ([True, 20], [12, 18])):
+        with pytest.raises(ValueError):
+            func(actual, forecast)
