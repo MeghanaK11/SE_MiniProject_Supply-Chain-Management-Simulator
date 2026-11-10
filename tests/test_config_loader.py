@@ -21,11 +21,15 @@ def write(tmp_path, cfg):
 
 
 def test_load_sample_config():
-    """TC-CFG-01: data/sample_config.json loads without error and keeps its values."""
+    """TC-CFG-01: data/sample_config.json loads without error and keeps its values; exponential smoothing with alpha 1 is also valid."""
     cfg = load_config(str(SAMPLE_CONFIG))
     assert cfg["simulation"]["days"] == 30
     assert len(cfg["products"]) == 3
     assert len(cfg["suppliers"]) == 3
+    assert cfg["policy"]["forecast_method"] == "moving_average"
+    alt = copy.deepcopy(cfg)
+    alt["policy"].update(forecast_method="exponential_smoothing", smoothing_alpha=1)
+    validate_config(alt)
 
 
 def _drop(section):
@@ -76,6 +80,25 @@ def _demand_entry(value):
     return mutate
 
 
+def _policy(key, value):
+    """Set a policy key; a value of None removes it."""
+    def mutate(cfg):
+        if value is None:
+            cfg["policy"].pop(key)
+        else:
+            cfg["policy"][key] = value
+    return mutate
+
+
+def _distance(value):
+    def mutate(cfg):
+        if value is None:
+            cfg["suppliers"][0].pop("distance_km")
+        else:
+            cfg["suppliers"][0]["distance_km"] = value
+    return mutate
+
+
 def _mode_rate(value):
     def mutate(cfg):
         cfg["transport_modes"]["road"] = value
@@ -123,6 +146,26 @@ MALFORMED = [
     ("transport mode without rate", _mode_rate({}), "cost_per_unit_km"),
     ("transport mode rate negative", _mode_rate({"cost_per_unit_km": -0.01}), "cost_per_unit_km"),
     ("transport mode rate text", _mode_rate({"cost_per_unit_km": "0.02"}), "cost_per_unit_km"),
+    ("seed text", lambda cfg: cfg["simulation"].update(seed="42"), "seed"),
+    ("seed fraction", lambda cfg: cfg["simulation"].update(seed=4.2), "seed"),
+    *[(f"policy without {k}", _policy(k, None), k) for k in (
+        "supplier_strategy", "forecast_method", "forecast_window",
+        "max_supplier_delay_days", "service_z", "smoothing_alpha")],
+    ("strategy unknown", _policy("supplier_strategy", "random"), "supplier_strategy"),
+    ("strategy a list", _policy("supplier_strategy", ["balanced"]), "supplier_strategy"),
+    ("forecast method typo", _policy("forecast_method", "exp_smoothing"), "forecast_method"),
+    ("forecast window zero", _policy("forecast_window", 0), "forecast_window"),
+    ("forecast window fraction", _policy("forecast_window", 7.5), "forecast_window"),
+    ("max delay zero", _policy("max_supplier_delay_days", 0), "max_supplier_delay_days"),
+    ("max delay bool", _policy("max_supplier_delay_days", True), "max_supplier_delay_days"),
+    ("service z negative", _policy("service_z", -1.0), "service_z"),
+    ("service z text", _policy("service_z", "1.65"), "service_z"),
+    ("alpha zero", _policy("smoothing_alpha", 0), "smoothing_alpha"),
+    ("alpha above one", _policy("smoothing_alpha", 1.5), "smoothing_alpha"),
+    ("alpha NaN", _policy("smoothing_alpha", float("nan")), "smoothing_alpha"),
+    ("distance missing", _distance(None), "distance_km"),
+    ("distance negative", _distance(-5), "distance_km"),
+    ("distance text", _distance("350"), "distance_km"),
 ]
 
 

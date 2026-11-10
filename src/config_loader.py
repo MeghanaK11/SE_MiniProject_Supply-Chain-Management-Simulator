@@ -3,19 +3,23 @@
 This module checks that the file is safe to read, that every section is present
 with the right shape, that the run length is in range, that every
 cross-reference points at something that exists, and that initial stock, supplier
-prices, demand entries and transport modes hold values of the right type and
-range. Product and supplier fields such as costs, lead time and reliability are
-checked again by Product and Supplier when the engine builds them.
+prices, demand entries, transport modes, the run seed and every policy setting
+hold values of the right type and range. Product and supplier fields such as
+costs, lead time and reliability are checked again by Product and Supplier when
+the engine builds them.
 """
 import json
 import math
 import os
+
+from src.suppliers import STRATEGIES
 
 REQUIRED_SECTIONS = ("simulation", "policy", "warehouse", "products",
                      "suppliers", "demand", "transport_modes")
 MAX_CONFIG_BYTES = 1_000_000
 MAX_DAYS = 3650
 DEMAND_PATTERNS = ("constant", "uniform", "seasonal")
+FORECAST_METHODS = ("moving_average", "exponential_smoothing")
 
 _SECTION_TYPES = {
     "simulation": dict, "policy": dict, "warehouse": dict, "products": list,
@@ -85,6 +89,31 @@ def _check_demand_entry(product_id: str, entry) -> None:
         raise ValueError(f"{where} has amplitude {entry['amplitude']!r}; it must be a finite number")
 
 
+def _check_policy(policy: dict) -> None:
+    """Every policy setting must be present; a typo must fail here, not fall back to a default."""
+    def require(key):
+        if key not in policy:
+            raise ValueError(f"policy is missing '{key}'")
+        return policy[key]
+
+    strategy = require("supplier_strategy")
+    if not isinstance(strategy, str) or strategy not in STRATEGIES:
+        raise ValueError(f"policy.supplier_strategy is {strategy!r}; expected one of {STRATEGIES}")
+    method = require("forecast_method")
+    if not isinstance(method, str) or method not in FORECAST_METHODS:
+        raise ValueError(f"policy.forecast_method is {method!r}; expected one of {FORECAST_METHODS}")
+    for key in ("forecast_window", "max_supplier_delay_days"):
+        value = require(key)
+        if not _is_int(value) or value < 1:
+            raise ValueError(f"policy.{key} must be a whole number of at least 1, got {value!r}")
+    service_z = require("service_z")
+    if not _is_number(service_z) or service_z < 0:
+        raise ValueError(f"policy.service_z must be a number of 0 or more, got {service_z!r}")
+    alpha = require("smoothing_alpha")
+    if not _is_number(alpha) or not 0 < alpha <= 1:
+        raise ValueError(f"policy.smoothing_alpha must be a number above 0 and at most 1, got {alpha!r}")
+
+
 def validate_config(cfg: dict) -> None:
     """Raise ValueError naming the first section or field that is missing, out of range or unknown."""
     if not isinstance(cfg, dict):
@@ -98,6 +127,10 @@ def validate_config(cfg: dict) -> None:
     days = cfg["simulation"].get("days")
     if not _is_int(days) or not 1 <= days <= MAX_DAYS:
         raise ValueError(f"simulation.days must be an integer from 1 to {MAX_DAYS}, got {days!r}")
+    if "seed" in cfg["simulation"] and not _is_int(cfg["simulation"]["seed"]):
+        raise ValueError(f"simulation.seed must be an integer, got {cfg['simulation']['seed']!r}")
+
+    _check_policy(cfg["policy"])
 
     products = _ids(cfg["products"], "product_id", "products")
     if not products:
@@ -144,6 +177,9 @@ def validate_config(cfg: dict) -> None:
                 raise ValueError(
                     f"supplier '{supplier_id}' price for '{product_id}' must be a number of 0 or more, got {price!r}")
             sold.add(product_id)
+        distance = supplier.get("distance_km")
+        if not _is_number(distance) or distance < 0:
+            raise ValueError(f"supplier '{supplier_id}' distance_km must be a number of 0 or more, got {distance!r}")
         mode = supplier.get("transport_mode")
         if not isinstance(mode, str) or not mode.strip():
             raise ValueError(f"supplier '{supplier_id}' transport_mode must be a non-empty string, got {mode!r}")
