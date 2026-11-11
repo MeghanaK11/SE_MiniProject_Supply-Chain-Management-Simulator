@@ -82,8 +82,8 @@
   "demand": {
     "P-001": {
       "pattern": "uniform",
-      "base": 45,
-      "spread": 10
+      "base": 40,
+      "spread": 5
     },
     "P-002": {
       "pattern": "seasonal",
