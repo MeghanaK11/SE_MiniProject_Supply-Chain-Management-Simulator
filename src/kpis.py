@@ -34,7 +34,7 @@ def _validate_records(daily_records):
 
         for field in (
             "day", "demand", "shipped",
-            "stock_end", "backorder", "on_order"
+            "stock_end", "backorder", "on_order",
         ):
             value = record[field]
             if type(value) is not int or value < 0:
@@ -42,7 +42,8 @@ def _validate_records(daily_records):
                     f"record {index}: {field} must be a non-negative integer"
                 )
 
-        if not isinstance(record["product_id"], str) or not record["product_id"]:
+        product_id = record["product_id"]
+        if not isinstance(product_id, str) or not product_id.strip():
             raise ValueError(
                 f"record {index}: product_id must be a non-empty string"
             )
@@ -58,9 +59,9 @@ def _validate_records(daily_records):
                 f"record {index}: forecast must be a finite non-negative number"
             )
 
-        if record["shipped"] > record["demand"] + record["backorder"]:
+        if record["shipped"] > record["demand"]:
             raise ValueError(
-                f"record {index}: shipped quantity is inconsistent"
+                f"record {index}: shipped quantity cannot exceed demand"
             )
 
 
@@ -103,9 +104,25 @@ def _product_map(products):
 
 def fill_rate(total_shipped, total_demand):
     """Return total shipped divided by total demand."""
+    for name, value in (
+        ("total_shipped", total_shipped),
+        ("total_demand", total_demand),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+        ):
+            raise ValueError(f"{name} must be a finite non-negative number")
+
+    if total_shipped > total_demand:
+        raise ValueError("total_shipped cannot exceed total_demand")
+
     if total_demand == 0:
         return 0.0
-    return total_shipped / total_demand
+
+    return round(total_shipped / total_demand, 4)
 
 
 def service_level(daily_records):
@@ -118,7 +135,7 @@ def service_level(daily_records):
         for record in daily_records
     )
 
-    return 1.0 - days_with_stockout / len(daily_records)
+    return round(1.0 - days_with_stockout / len(daily_records), 4)
 
 
 def average_inventory_units(daily_records):
@@ -131,11 +148,11 @@ def average_inventory_units(daily_records):
         for record in daily_records
     )
 
-    return total_stock / len(daily_records)
+    return round(total_stock / len(daily_records), 4)
 
 
 def inventory_turnover(daily_records, products):
-    """Return COGS divided by average inventory value."""
+    """Return COGS divided by average inventory value per distinct day."""
     if not daily_records:
         return 0.0
 
@@ -157,14 +174,13 @@ def inventory_turnover(daily_records, products):
         total_cogs += record["shipped"] * unit_cost
         total_inventory_value += record["stock_end"] * unit_cost
 
-    average_inventory_value = (
-        total_inventory_value / len(daily_records)
-    )
+    distinct_days = len({record["day"] for record in daily_records})
+    average_inventory_value = total_inventory_value / distinct_days
 
     if average_inventory_value == 0:
         return 0.0
 
-    return total_cogs / average_inventory_value
+    return round(total_cogs / average_inventory_value, 4)
 
 
 def compute_kpis(daily_records, products, forecast_mae=0.0):
@@ -193,7 +209,7 @@ def compute_kpis(daily_records, products, forecast_mae=0.0):
             "avg_inventory_units": 0.0,
             "inventory_turnover": 0.0,
             "total_backorder_end": 0,
-            "forecast_mae": float(forecast_mae),
+            "forecast_mae": round(float(forecast_mae), 4),
         }
 
     total_demand = sum(
@@ -231,5 +247,5 @@ def compute_kpis(daily_records, products, forecast_mae=0.0):
             daily_records, products
         ),
         "total_backorder_end": total_backorder_end,
-        "forecast_mae": float(forecast_mae),
+        "forecast_mae": round(float(forecast_mae), 4),
     }
