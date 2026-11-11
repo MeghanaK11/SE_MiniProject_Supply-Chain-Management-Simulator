@@ -56,6 +56,7 @@ def sample_records():
 # ============================================================
 
 def test_fill_rate():
+    """TC-KPI-01: Calculate fill rate correctly."""
     assert fill_rate(180, 200) == 0.9
 
 
@@ -72,11 +73,13 @@ def test_fill_rate():
     ],
 )
 def test_fill_rate_rejects_invalid_inputs(shipped, demand):
+    """TC-KPI-01: Reject invalid fill-rate inputs."""
     with pytest.raises(ValueError):
         fill_rate(shipped, demand)
 
 
 def test_fill_rate_rejects_shipped_greater_than_demand():
+    """TC-KPI-01: Reject aggregate shipments exceeding aggregate demand."""
     with pytest.raises(ValueError, match="cannot exceed"):
         fill_rate(11, 10)
 
@@ -86,11 +89,13 @@ def test_fill_rate_rejects_shipped_greater_than_demand():
 # ============================================================
 
 def test_service_level():
+    """TC-KPI-02: Calculate service level correctly."""
     records = sample_records()
     assert service_level(records) == 0.5
 
 
 def test_service_level_empty_records():
+    """TC-KPI-02: Return zero service level for empty records."""
     assert service_level([]) == 0.0
 
 
@@ -99,7 +104,7 @@ def test_service_level_empty_records():
 # ============================================================
 
 def test_inventory_turnover_uses_distinct_days():
-    """Average inventory value must divide by distinct days, not rows."""
+    """TC-KPI-03: Calculate average inventory using distinct days."""
     products = [
         Product(
             product_id=f"P-00{i}",
@@ -135,6 +140,7 @@ def test_inventory_turnover_uses_distinct_days():
 
 
 def test_inventory_turnover_zero_average_inventory():
+    """TC-KPI-03: Return zero when average inventory value is zero."""
     records = sample_records()
     for record in records:
         record["stock_end"] = 0
@@ -143,10 +149,12 @@ def test_inventory_turnover_zero_average_inventory():
 
 
 def test_inventory_turnover_empty_records():
+    """TC-KPI-03: Return zero for empty records."""
     assert inventory_turnover([], sample_products()) == 0.0
 
 
 def test_inventory_turnover_unknown_product():
+    """TC-KPI-03: Reject unknown products."""
     records = sample_records()
     records[0]["product_id"] = "P-999"
 
@@ -155,20 +163,23 @@ def test_inventory_turnover_unknown_product():
 
 
 # ============================================================
-# TC-KPI-04: Invalid inputs
+# TC-KPI-04: Invalid inputs and validation
 # ============================================================
 
 def test_invalid_records_rejected_for_wrong_container():
+    """TC-KPI-04: Reject unsupported daily-record containers."""
     with pytest.raises(ValueError, match="list or tuple"):
         compute_kpis("not records", sample_products())
 
 
 def test_invalid_record_type_rejected():
+    """TC-KPI-04: Reject invalid record types."""
     with pytest.raises(ValueError, match="must be a dictionary"):
         compute_kpis([None], sample_products())
 
 
 def test_missing_record_field_rejected():
+    """TC-KPI-04: Reject records with missing required fields."""
     with pytest.raises(ValueError, match="missing required field"):
         compute_kpis([{"product_id": "P-001"}], sample_products())
 
@@ -191,6 +202,7 @@ def test_missing_record_field_rejected():
     ],
 )
 def test_record_rejects_invalid_integer_fields(field, value):
+    """TC-KPI-04: Reject invalid integer fields."""
     records = sample_records()
     records[0][field] = value
 
@@ -203,6 +215,7 @@ def test_record_rejects_invalid_integer_fields(field, value):
     ["", "   ", None, 123, True],
 )
 def test_record_rejects_invalid_product_id(product_id):
+    """TC-KPI-04: Reject invalid product IDs."""
     records = sample_records()
     records[0]["product_id"] = product_id
 
@@ -215,20 +228,11 @@ def test_record_rejects_invalid_product_id(product_id):
     [-1, True, "100", None, float("nan"), float("inf")],
 )
 def test_record_rejects_invalid_forecast(forecast):
+    """TC-KPI-04: Reject invalid forecast values."""
     records = sample_records()
     records[0]["forecast"] = forecast
 
     with pytest.raises(ValueError, match="forecast"):
-        compute_kpis(records, sample_products())
-
-
-def test_shipped_greater_than_demand_rejected():
-    records = sample_records()
-    records[0]["shipped"] = 101
-    records[0]["demand"] = 100
-    records[0]["backorder"] = 10
-
-    with pytest.raises(ValueError, match="cannot exceed demand"):
         compute_kpis(records, sample_products())
 
 
@@ -237,6 +241,7 @@ def test_shipped_greater_than_demand_rejected():
     [-1, True, "5", None, float("nan"), float("inf")],
 )
 def test_invalid_forecast_mae_rejected(forecast_mae):
+    """TC-KPI-04: Reject invalid forecast MAE values."""
     with pytest.raises(ValueError, match="forecast_mae"):
         compute_kpis(
             sample_records(),
@@ -246,11 +251,14 @@ def test_invalid_forecast_mae_rejected(forecast_mae):
 
 
 def test_products_must_be_supported_collection():
+    """TC-KPI-04: Reject unsupported product collections."""
     with pytest.raises(ValueError, match="products must be"):
         inventory_turnover(sample_records(), "invalid products")
 
 
 def test_product_without_unit_cost_rejected():
+    """TC-KPI-04: Reject products without unit cost."""
+
     class ProductWithoutCost:
         product_id = "P-001"
 
@@ -263,6 +271,8 @@ def test_product_without_unit_cost_rejected():
     [-1, True, "10", None, float("nan"), float("inf")],
 )
 def test_invalid_product_unit_cost_rejected(cost):
+    """TC-KPI-04: Reject invalid product unit costs."""
+
     class ProductWithInvalidCost:
         product_id = "P-001"
         unit_cost = cost
@@ -275,34 +285,30 @@ def test_invalid_product_unit_cost_rejected(cost):
 
 
 # ============================================================
-# TC-KPI-05: Average inventory units
+# TC-KPI-05: Average inventory and overall KPIs
 # ============================================================
 
 def test_average_inventory_units():
+    """TC-KPI-05: Calculate average inventory units correctly."""
     records = sample_records()
     assert average_inventory_units(records) == 40.0
 
 
 def test_average_inventory_units_empty_records():
+    """TC-KPI-05: Return zero average inventory for empty records."""
     assert average_inventory_units([]) == 0.0
 
 
-# ============================================================
-# TC-KPI-06: Zero-demand behaviour
-# ============================================================
+def test_zero_demand_returns_full_fill_rate():
+    """TC-KPI-05: Return fill rate of 1.0 when demand is zero."""
+    assert fill_rate(0, 0) == 1.0
 
-def test_zero_demand_returns_zero_fill_rate():
-    assert fill_rate(0, 0) == 0.0
-
-
-# ============================================================
-# TC-KPI-07: Empty simulation
-# ============================================================
 
 def test_empty_records_return_zero_kpis():
+    """TC-KPI-05: Return default KPIs for an empty simulation."""
     result = compute_kpis([], sample_products())
 
-    assert result["fill_rate"] == 0.0
+    assert result["fill_rate"] == 1.0
     assert result["service_level"] == 0.0
     assert result["avg_inventory_units"] == 0.0
     assert result["inventory_turnover"] == 0.0
@@ -310,11 +316,8 @@ def test_empty_records_return_zero_kpis():
     assert result["forecast_mae"] == 0.0
 
 
-# ============================================================
-# TC-KPI-08: Unknown product
-# ============================================================
-
 def test_unknown_product_rejected():
+    """TC-KPI-05: Reject unknown products during KPI calculation."""
     records = sample_records()
     records[0]["product_id"] = "P-999"
 
@@ -322,11 +325,8 @@ def test_unknown_product_rejected():
         compute_kpis(records, sample_products())
 
 
-# ============================================================
-# TC-KPI-09: Complete KPI calculation and rounding
-# ============================================================
-
 def test_compute_kpis():
+    """TC-KPI-05: Calculate all KPIs correctly."""
     result = compute_kpis(
         sample_records(),
         sample_products(),
@@ -342,6 +342,7 @@ def test_compute_kpis():
 
 
 def test_kpi_values_are_rounded_to_four_decimals():
+    """TC-KPI-05: Round KPI values to four decimal places."""
     records = sample_records()
     records[0]["demand"] = 3
     records[0]["shipped"] = 1
@@ -358,11 +359,9 @@ def test_kpi_values_are_rounded_to_four_decimals():
     assert result["forecast_mae"] == 1.2346
 
 
-# ============================================================
-# TC-KPI-10: Product catalog support
-# ============================================================
-
 def test_inventory_turnover_accepts_product_catalog_like_object():
+    """TC-KPI-05: Support product catalog objects."""
+
     class ProductCollection:
         def list_all(self):
             return sample_products()
@@ -371,7 +370,10 @@ def test_inventory_turnover_accepts_product_catalog_like_object():
         sample_records(),
         ProductCollection(),
     ) == 4.5
+
+
 def test_inventory_turnover_accepts_product_dictionary():
+    """TC-KPI-05: Support product dictionaries."""
     products = {
         "P-001": sample_products()[0]
     }

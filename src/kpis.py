@@ -59,11 +59,6 @@ def _validate_records(daily_records):
                 f"record {index}: forecast must be a finite non-negative number"
             )
 
-        if record["shipped"] > record["demand"]:
-            raise ValueError(
-                f"record {index}: shipped quantity cannot exceed demand"
-            )
-
 
 def _product_map(products):
     """Convert supported product collections into an ID-to-product mapping."""
@@ -120,7 +115,7 @@ def fill_rate(total_shipped, total_demand):
         raise ValueError("total_shipped cannot exceed total_demand")
 
     if total_demand == 0:
-        return 0.0
+        return 1.0
 
     return round(total_shipped / total_demand, 4)
 
@@ -204,7 +199,7 @@ def compute_kpis(daily_records, products, forecast_mae=0.0):
 
     if not daily_records:
         return {
-            "fill_rate": 0.0,
+            "fill_rate": 1.0,
             "service_level": 0.0,
             "avg_inventory_units": 0.0,
             "inventory_turnover": 0.0,
