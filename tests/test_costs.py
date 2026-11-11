@@ -18,74 +18,142 @@ def sample_product():
     )
 
 
-def test_holding_and_stockout_cost():
-    """TC-CST-01: Calculate holding and stockout costs."""
+# --------------------------------------------------
+# TC-CST-01: Holding cost
+# --------------------------------------------------
+
+def test_holding_cost():
+    """TC-CST-01: Holding cost = 10 x 0.5 = 5.0."""
     tracker = CostTracker()
     product = sample_product()
 
     tracker.add_holding_cost(10, product)
-    tracker.add_stockout_cost(3, product)
 
     assert tracker.holding_cost == 5.0
-    assert tracker.stockout_cost == 90.0
+    assert tracker.breakdown()["holding"] == 5.0
 
 
-def test_ordering_and_purchase_cost():
-    """TC-CST-02: Calculate ordering and purchase costs."""
+# --------------------------------------------------
+# TC-CST-02: Stockout cost
+# --------------------------------------------------
+
+def test_stockout_cost():
+    """TC-CST-02: Stockout cost = 3 x 30 = 90.0."""
     tracker = CostTracker()
     product = sample_product()
 
-    tracker.add_ordering_cost(product, 2)
-    tracker.add_purchase_cost(10, 100)
+    tracker.add_stockout_cost(3, product)
 
-    assert tracker.ordering_cost == 100.0
-    assert tracker.purchase_cost == 1000.0
-
-
-def test_transport_cost_accumulation():
-    """TC-CST-03: Accumulate transport costs."""
-    tracker = CostTracker()
-
-    tracker.add_transport_cost(125.50)
-    tracker.add_transport_cost(74.50)
-
-    assert tracker.transport_cost == 200.0
+    assert tracker.stockout_cost == 90.0
+    assert tracker.breakdown()["stockout"] == 90.0
 
 
-def test_total_and_cost_breakdown():
-    """TC-CST-04: Total equals the sum of all cost categories."""
+# --------------------------------------------------
+# TC-CST-03: All cost types and total
+# --------------------------------------------------
+
+def test_all_cost_types_and_total():
+    """TC-CST-03: Calculate each cost type and verify their total."""
     tracker = CostTracker()
     product = sample_product()
 
     tracker.add_holding_cost(10, product)
     tracker.add_stockout_cost(3, product)
-    tracker.add_ordering_cost(product, 2)
-    tracker.add_purchase_cost(10, 100)
-    tracker.add_transport_cost(200)
+    tracker.add_ordering_cost(product, 1)
+    tracker.add_purchase_cost(2, 100)
+    tracker.add_transport_cost(25.50)
 
     result = tracker.breakdown()
 
     assert result["holding"] == 5.0
     assert result["stockout"] == 90.0
-    assert result["ordering"] == 100.0
-    assert result["purchase"] == 1000.0
-    assert result["transport"] == 200.0
-    assert result["total"] == 1395.0
-    assert tracker.total_cost == 1395.0
+    assert result["ordering"] == 50.0
+    assert result["purchase"] == 200.0
+    assert result["transport"] == 25.50
+
+    expected_total = (
+        result["holding"]
+        + result["stockout"]
+        + result["ordering"]
+        + result["purchase"]
+        + result["transport"]
+    )
+
+    assert result["total"] == expected_total
+    assert result["total"] == 370.50
+    assert tracker.total_cost == 370.50
 
 
-@pytest.mark.parametrize("quantity", [-1, 1.5, True])
-def test_invalid_holding_quantity(quantity):
-    """Reject invalid inventory quantities."""
+def test_breakdown_rounds_values_to_two_decimals():
+    """Verify breakdown values are rounded to two decimal places."""
+    tracker = CostTracker()
+
+    tracker.add_transport_cost(10.126)
+
+    result = tracker.breakdown()
+
+    assert result["transport"] == 10.13
+    assert result["total"] == 10.13
+
+
+# --------------------------------------------------
+# TC-CST-04: Negative or invalid inputs
+# --------------------------------------------------
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "holding",
+        "stockout",
+        "ordering",
+        "purchase_quantity",
+        "purchase_price",
+        "transport",
+    ],
+)
+def test_negative_input_raises_value_error(operation):
+    """TC-CST-04: Reject negative inputs across all cost methods."""
+    tracker = CostTracker()
+    product = sample_product()
+
+    with pytest.raises(ValueError):
+        if operation == "holding":
+            tracker.add_holding_cost(-1, product)
+
+        elif operation == "stockout":
+            tracker.add_stockout_cost(-1, product)
+
+        elif operation == "ordering":
+            tracker.add_ordering_cost(product, -1)
+
+        elif operation == "purchase_quantity":
+            tracker.add_purchase_cost(-1, 100)
+
+        elif operation == "purchase_price":
+            tracker.add_purchase_cost(1, -100)
+
+        elif operation == "transport":
+            tracker.add_transport_cost(-10)
+
+
+@pytest.mark.parametrize(
+    "quantity",
+    [1.5, True, "10", None],
+)
+def test_invalid_holding_quantity_raises_value_error(quantity):
+    """TC-CST-04: Reject invalid holding quantities."""
     tracker = CostTracker()
 
     with pytest.raises(ValueError):
         tracker.add_holding_cost(quantity, sample_product())
 
 
-def test_negative_transport_cost_rejected():
-    """Reject negative transport costs."""
+def test_invalid_transport_amount_raises_value_error():
+    """TC-CST-04: Reject non-finite transport amounts."""
     tracker = CostTracker()
 
     with pytest.raises(ValueError):
-        tracker.add_transport_cost(-10)
+        tracker.add_transport_cost(float("inf"))
+
+    with pytest.raises(ValueError):
+        tracker.add_transport_cost(float("nan"))

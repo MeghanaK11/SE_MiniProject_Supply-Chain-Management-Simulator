@@ -53,14 +53,14 @@ class CostTracker:
         )
 
     def breakdown(self):
-        """Return each cost category and the total."""
+        """Return each cost category and the total, rounded to 2 decimals."""
         return {
-            "holding": self.holding_cost,
-            "stockout": self.stockout_cost,
-            "ordering": self.ordering_cost,
-            "purchase": self.purchase_cost,
-            "transport": self.transport_cost,
-            "total": self.total_cost,
+            "holding": round(self.holding_cost, 2),
+            "stockout": round(self.stockout_cost, 2),
+            "ordering": round(self.ordering_cost, 2),
+            "purchase": round(self.purchase_cost, 2),
+            "transport": round(self.transport_cost, 2),
+            "total": round(self.total_cost, 2),
         }
 
     @staticmethod
