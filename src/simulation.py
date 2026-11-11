@@ -2,6 +2,7 @@
 """Simulation engine for the Supply Chain Management Simulator."""
 
 from dataclasses import dataclass
+import math
 import random
 
 from src.clock import EventLog, SimulationClock
@@ -22,10 +23,7 @@ from src.inventory import (
 from src.kpis import compute_kpis
 from src.orders import OrderBook
 from src.products import ProductCatalog
-from src.purchase_orders import (
-    PurchaseOrderBook,
-    apply_random_delay,
-)
+from src.purchase_orders import PurchaseOrderBook
 from src.suppliers import SupplierRegistry, select_supplier
 
 
@@ -44,8 +42,47 @@ class SimulationResult:
         return self.costs
 
 
+VALID_FORECAST_METHODS = {
+    "moving_average",
+    "exponential_smoothing",
+}
+
+
+def apply_random_delay(reliability, rng, max_delay_days):
+    """Return a random supplier delivery delay in days.
+
+    A supplier delivers on time with the given reliability.
+    Otherwise, a delay between 1 and max_delay_days is returned.
+    """
+    if (
+        isinstance(reliability, bool)
+        or not isinstance(reliability, (int, float))
+        or not math.isfinite(reliability)
+        or not 0 <= reliability <= 1
+    ):
+        raise ValueError("reliability must be between 0 and 1")
+
+    if (
+        isinstance(max_delay_days, bool)
+        or not isinstance(max_delay_days, int)
+        or max_delay_days < 1
+    ):
+        raise ValueError("max_delay_days must be a positive integer")
+
+    if not hasattr(rng, "random") or not hasattr(rng, "randint"):
+        raise ValueError("rng must provide random() and randint()")
+
+    if rng.random() < reliability:
+        return 0
+
+    return rng.randint(1, max_delay_days)
+
+
 def _forecast(history, method, window, alpha, fallback):
     """Calculate the next demand forecast."""
+    if method not in VALID_FORECAST_METHODS:
+        raise ValueError(f"Unknown forecast method: {method}")
+
     if not history:
         return float(fallback)
 
@@ -69,6 +106,16 @@ def run_simulation(config):
 
     days = simulation_cfg["days"]
     rng = random.Random(simulation_cfg.get("seed", 42))
+
+    forecast_method = policy.get("forecast_method", "moving_average")
+    if forecast_method not in VALID_FORECAST_METHODS:
+        raise ValueError(f"Unknown forecast method: {forecast_method}")
+
+    forecast_window = policy.get("forecast_window", 7)
+    smoothing_alpha = policy.get("smoothing_alpha", 0.3)
+    service_z = policy.get("service_z", 1.65)
+    supplier_strategy = policy.get("supplier_strategy", "balanced")
+    max_delay = policy.get("max_supplier_delay_days", 3)
 
     products = ProductCatalog.from_config(config["products"])
     suppliers = SupplierRegistry.from_config(config["suppliers"])
@@ -96,18 +143,15 @@ def run_simulation(config):
     }
     transport_modes = config["transport_modes"]
 
-    histories = {product.product_id: [] for product in products.list_all()}
+    histories = {
+        product.product_id: []
+        for product in products.list_all()
+    }
     daily_records = []
 
-    forecast_method = policy.get("forecast_method", "moving_average")
-    forecast_window = policy.get("forecast_window", 7)
-    smoothing_alpha = policy.get("smoothing_alpha", 0.3)
-    service_z = policy.get("service_z", 1.65)
-    supplier_strategy = policy.get("supplier_strategy", "balanced")
-    max_delay = policy.get("max_supplier_delay_days", 3)
-
-    for _ in range(days):
-        day = clock.advance()
+    # Process days 0 through days - 1.
+    while not clock.is_finished():
+        day = clock.current_day
 
         # 1. Receive purchase orders that are due today.
         for po in po_book.due_on(day):
@@ -152,7 +196,11 @@ def run_simulation(config):
             available = warehouse.stock_level(product_id)
             allocated = order_book.allocate(product_id, available)
 
-            shipped = warehouse.ship(product_id, allocated) if allocated else 0
+            shipped = (
+                warehouse.ship(product_id, allocated)
+                if allocated
+                else 0
+            )
 
             if shipped > 0:
                 event_log.record(
@@ -236,13 +284,8 @@ def run_simulation(config):
             ):
                 continue
 
-            average_daily_demand = (
-                sum(history[-forecast_window:]) /
-                min(len(history), forecast_window)
-                if history else forecast
-            )
-
-            annual_demand = max(1, average_daily_demand * 365)
+            # EOQ uses the forecast, annualized to 365 days.
+            annual_demand = max(1, forecast * 365)
             annual_holding_cost = product.holding_cost_per_day * 365
 
             if annual_holding_cost > 0:
@@ -259,14 +302,13 @@ def run_simulation(config):
                 min(quantity, supplier.max_order_qty),
             )
 
+            # place() creates the order directly in IN_TRANSIT.
             po = po_book.place(
                 supplier,
                 product_id,
                 quantity,
                 day,
             )
-
-            po.advance("IN_TRANSIT")
 
             # Apply supplier reliability delay.
             delay = apply_random_delay(
@@ -304,6 +346,9 @@ def run_simulation(config):
                 f"Purchase order {po.po_id} placed for "
                 f"{quantity} units of {product_id}",
             )
+
+        # Advance only after the current day has been fully processed.
+        clock.advance()
 
     # 5. Calculate forecast error and final KPIs.
     actual = [record["demand"] for record in daily_records]

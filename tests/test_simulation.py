@@ -5,16 +5,91 @@ import copy
 import json
 from pathlib import Path
 
+import pytest
+
 from src.simulation import run_simulation
 
 
-CONFIG_PATH = Path(__file__).resolve().parents[1] / "data" / "sample_config.json"
+CONFIG_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "data"
+    / "sample_config.json"
+)
 
 
 def load_sample_config():
     with CONFIG_PATH.open("r", encoding="utf-8") as file:
         return json.load(file)
 
+
+# --------------------------------------------------
+# B-19: Simulation Engine MVP tests
+# TC-SIM-01 to TC-SIM-04
+# --------------------------------------------------
+
+def test_simulation_produces_90_daily_records():
+    """TC-SIM-01: 30 days and 3 products produce 90 records."""
+    result = run_simulation(load_sample_config())
+
+    assert len(result.daily_records) == 90
+
+
+def test_simulation_inventory_and_fulfilment_constraints():
+    """
+    TC-SIM-02: Stock and backorders never go negative;
+    total shipped never exceeds total demand.
+    """
+    result = run_simulation(load_sample_config())
+
+    for record in result.daily_records:
+        assert record["stock_end"] >= 0
+        assert record["backorder"] >= 0
+        assert record["shipped"] >= 0
+
+    total_shipped = sum(
+        record["shipped"]
+        for record in result.daily_records
+    )
+    total_demand = sum(
+        record["demand"]
+        for record in result.daily_records
+    )
+
+    assert total_shipped <= total_demand
+
+
+def test_simulation_is_deterministic_with_same_seed():
+    """TC-SIM-03: Same seed produces identical daily records."""
+    config = load_sample_config()
+
+    first_result = run_simulation(copy.deepcopy(config))
+    second_result = run_simulation(copy.deepcopy(config))
+
+    assert first_result.daily_records == second_result.daily_records
+
+
+def test_low_initial_stock_for_p003_triggers_purchase_order():
+    """TC-SIM-04: Low P-003 stock results in a PO_PLACED event."""
+    config = load_sample_config()
+
+    config["warehouse"]["initial_stock"]["P-003"] = 0
+
+    result = run_simulation(config)
+
+    p003_po_events = [
+        event
+        for event in result.events
+        if event["type"] == "PO_PLACED"
+        and "P-003" in event["message"]
+    ]
+
+    assert len(p003_po_events) >= 1
+
+
+# --------------------------------------------------
+# B-30: Simulation Engine v2 tests
+# TC-SIM-07 to TC-SIM-10
+# --------------------------------------------------
 
 def test_simulation_records_all_cost_categories():
     """TC-SIM-07: All cost categories should be present and totalled."""
@@ -74,7 +149,8 @@ def test_unreliable_suppliers_generate_delay_events():
     result = run_simulation(config)
 
     delayed_events = [
-        event for event in result.events
+        event
+        for event in result.events
         if event["type"] == "PO_DELAYED"
     ]
 
@@ -103,3 +179,12 @@ def test_simulation_returns_valid_kpis():
     assert result.kpis["inventory_turnover"] >= 0
     assert result.kpis["total_backorder_end"] >= 0
     assert result.kpis["forecast_mae"] >= 0
+
+
+def test_unknown_forecast_method_raises_value_error():
+    """Unknown forecast methods must not silently fall back."""
+    config = load_sample_config()
+    config["policy"]["forecast_method"] = "unknown_method"
+
+    with pytest.raises(ValueError, match="Unknown forecast method"):
+        run_simulation(config)
