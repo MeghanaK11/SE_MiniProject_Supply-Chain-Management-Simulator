@@ -33,9 +33,14 @@ def _is_int(value) -> bool:
 
 
 def _is_number(value) -> bool:
-    """True for finite ints and floats; bool, NaN and infinity are excluded."""
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value))
+    """True for finite ints and floats; bool, NaN, infinity and integers too
+    large to convert to a float are excluded."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def load_config(path: str) -> dict:
