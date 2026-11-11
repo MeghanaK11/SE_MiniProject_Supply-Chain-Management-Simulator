@@ -44,6 +44,16 @@ class PurchaseOrder:
         CANCELLED: set(),
     }
 
+    def __post_init__(self):
+        """Reject an invalid initial purchase order status."""
+        if (
+            not isinstance(self.status, str)
+            or self.status not in self.VALID_STATUSES
+        ):
+            raise ValueError(
+                f"Unknown purchase order status: {self.status!r}"
+            )
+
     @property
     def total_cost(self) -> float:
         """Quantity multiplied by unit price."""
@@ -56,6 +66,12 @@ class PurchaseOrder:
             or new_status not in self.VALID_STATUSES
         ):
             raise ValueError("Unknown purchase order status")
+
+        if (
+            not isinstance(self.status, str)
+            or self.status not in self.VALID_STATUSES
+        ):
+            raise ValueError("Unknown current purchase order status")
 
         if new_status not in self.TRANSITIONS[self.status]:
             raise ValueError(

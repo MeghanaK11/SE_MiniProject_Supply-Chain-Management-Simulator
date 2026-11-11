@@ -9,6 +9,7 @@ from src.purchase_orders import (
     IN_TRANSIT,
     DELIVERED,
     CANCELLED,
+    PurchaseOrder,
     PurchaseOrderBook,
     create_purchase_order,
 )
@@ -134,12 +135,44 @@ def test_po_invalid_lifecycle_transitions():
 
     assert po.status == PLACED
 
-    po.advance(CANCELLED)
+    with pytest.raises(ValueError, match="Unknown purchase order status"):
+        po.advance("BOGUS")
 
     with pytest.raises(ValueError):
-        po.advance(IN_TRANSIT)
+        po.advance(PLACED)
 
-    assert po.status == CANCELLED
+    po.advance(IN_TRANSIT)
+    po.advance(DELIVERED)
+
+    with pytest.raises(ValueError):
+        po.advance(PLACED)
+
+    assert po.status == DELIVERED
+
+    cancelled = create_purchase_order(
+        "PO-0002", sample_supplier("S-001"), "P-001", 10, 5
+    )
+    cancelled.advance(CANCELLED)
+
+    with pytest.raises(ValueError):
+        cancelled.advance(IN_TRANSIT)
+
+    assert cancelled.status == CANCELLED
+
+
+def test_po_invalid_initial_status():
+    """Reject an unknown status when creating a PurchaseOrder."""
+    with pytest.raises(ValueError, match="Unknown purchase order status"):
+        PurchaseOrder(
+            po_id="PO-0001",
+            supplier_id="S-001",
+            product_id="P-001",
+            quantity=10,
+            unit_price=110.0,
+            order_day=1,
+            expected_delivery_day=4,
+            status="BOGUS",
+        )
 
 
 def test_po_book_generates_sequential_ids():
@@ -158,10 +191,17 @@ def test_po_book_generates_sequential_ids():
 
     assert book.get("PO-0001") is first
     assert book.get("PO-0002") is second
+
     assert book.all_orders() == [first, second]
 
     with pytest.raises(KeyError):
         book.get("PO-9999")
+
+    # all_orders() must return a copy, not the internal list.
+    returned_orders = book.all_orders()
+    returned_orders.clear()
+
+    assert len(book.all_orders()) == 2
 
 
 def test_po_due_on():
@@ -178,6 +218,15 @@ def test_po_due_on():
     po.advance(DELIVERED)
 
     assert po not in book.due_on(8)
+
+
+@pytest.mark.parametrize("bad_day", [-1, 1.5, True, "5", None])
+def test_po_due_on_rejects_invalid_day(bad_day):
+    """TC-PO-09: Reject invalid day values."""
+    book = PurchaseOrderBook()
+
+    with pytest.raises(ValueError, match="day"):
+        book.due_on(bad_day)
 
 
 def test_po_on_order_quantity_excludes_closed_orders():
