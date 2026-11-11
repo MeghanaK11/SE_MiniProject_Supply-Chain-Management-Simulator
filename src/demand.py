@@ -1,8 +1,17 @@
+
 """Demand generation for supply-chain simulations."""
 
 import math
 import random
 from typing import Any
+
+
+def _is_finite_number(value: int | float) -> bool:
+    """Check whether a numeric value is finite, including large integers."""
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 class DemandGenerator:
@@ -18,7 +27,9 @@ class DemandGenerator:
         period: int = 7,
     ) -> None:
         """Initialize and validate a demand generator."""
-        if pattern not in {"constant", "uniform", "seasonal"}:
+        if not isinstance(pattern, str) or pattern not in {
+            "constant", "uniform", "seasonal"
+        }:
             raise ValueError(
                 "pattern must be 'constant', 'uniform' or 'seasonal'"
             )
@@ -29,13 +40,15 @@ class DemandGenerator:
         if type(spread) is not int or spread < 0:
             raise ValueError("spread must be a non-negative integer")
 
-        if isinstance(amplitude, bool) or not isinstance(
-            amplitude, (int, float)
+        if (
+            isinstance(amplitude, bool)
+            or not isinstance(amplitude, (int, float))
+            or not _is_finite_number(amplitude)
+            or amplitude < 0
         ):
-            raise ValueError("amplitude must be a finite non-negative number")
-
-        if not math.isfinite(amplitude) or amplitude < 0:
-            raise ValueError("amplitude must be a finite non-negative number")
+            raise ValueError(
+                "amplitude must be a finite non-negative number"
+            )
 
         if type(period) is not int or period <= 0:
             raise ValueError("period must be a positive integer")
@@ -43,7 +56,9 @@ class DemandGenerator:
         if pattern == "uniform" and rng is None:
             raise ValueError("rng is required for uniform demand")
 
-        if rng is not None and not callable(getattr(rng, "randint", None)):
+        if rng is not None and not callable(
+            getattr(rng, "randint", None)
+        ):
             raise TypeError("rng must provide a randint method")
 
         self.pattern = pattern
@@ -61,7 +76,7 @@ class DemandGenerator:
     ) -> "DemandGenerator":
         """Create a demand generator from a configuration dictionary."""
         if not isinstance(config, dict):
-            raise TypeError("config must be a dictionary")
+            raise ValueError("config must be a dictionary")
 
         return cls(
             pattern=config.get("pattern", "constant"),
