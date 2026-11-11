@@ -1,0 +1,92 @@
+
+{
+  "simulation": {
+    "days": 30,
+    "seed": 42
+  },
+  "policy": {
+    "supplier_strategy": "balanced",
+    "service_level": 1.65,
+    "forecast_method": "exponential_smoothing",
+    "forecast_window": 7,
+    "smoothing_alpha": 0.5,
+    "max_supplier_delay_days": 3
+  },
+  "warehouse": {
+    "warehouse_id": "WH-01",
+    "name": "Bengaluru Central Warehouse",
+    "initial_stock": {
+      "P-001": 120,
+      "P-002": 40,
+      "P-003": 15
+    }
+  },
+  "products": [
+    {
+      "product_id": "P-001",
+      "name": "Packaged Drinking Water (case of 12)",
+      "unit_cost": 120.0,
+      "holding_cost_per_day": 0.5,
+      "stockout_penalty": 30.0,
+      "order_cost": 500.0
+    },
+    {
+      "product_id": "P-002",
+      "name": "Basmati Rice 25 kg bag",
+      "unit_cost": 1400.0,
+      "holding_cost_per_day": 2.0,
+      "stockout_penalty": 150.0,
+      "order_cost": 800.0
+    },
+    {
+      "product_id": "P-003",
+      "name": "LED Bulb 9W (box of 10)",
+      "unit_cost": 650.0,
+      "holding_cost_per_day": 1.0,
+      "stockout_penalty": 80.0,
+      "order_cost": 600.0
+    }
+  ],
+  "suppliers": [
+    {
+      "supplier_id": "S-001",
+      "name": "Deccan Wholesale Traders",
+      "lead_time_days": 3,
+      "prices": {"P-001": 110.0, "P-002": 1350.0},
+      "reliability": 0.90,
+      "max_order_qty": 500,
+      "distance_km": 350,
+      "transport_mode": "road"
+    },
+    {
+      "supplier_id": "S-002",
+      "name": "CityQuick Distributors",
+      "lead_time_days": 1,
+      "prices": {"P-001": 125.0, "P-003": 640.0},
+      "reliability": 0.97,
+      "max_order_qty": 200,
+      "distance_km": 40,
+      "transport_mode": "road"
+    },
+    {
+      "supplier_id": "S-003",
+      "name": "Northern Rail Supplies",
+      "lead_time_days": 5,
+      "prices": {"P-002": 1280.0, "P-003": 600.0},
+      "reliability": 0.80,
+      "max_order_qty": 800,
+      "distance_km": 1500,
+      "transport_mode": "rail"
+    }
+  ],
+  "demand": {
+    "P-001": {"pattern": "uniform", "base": 20, "spread": 5},
+    "P-002": {"pattern": "seasonal", "base": 8, "amplitude": 3, "period": 7},
+    "P-003": {"pattern": "constant", "base": 4}
+  },
+  "transport_modes": {
+    "road": {"cost_per_unit_km": 0.02},
+    "rail": {"cost_per_unit_km": 0.012},
+    "air": {"cost_per_unit_km": 0.10}
+  }
+}
