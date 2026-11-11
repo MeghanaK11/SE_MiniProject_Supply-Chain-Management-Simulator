@@ -1,8 +1,5 @@
 
-"""Purchase orders for the supply chain simulator (SCM-F-013/014).
-
-The purchase order lifecycle and order book are implemented here.
-"""
+"""Purchase orders for the supply chain simulator (SCM-F-013/014)."""
 
 from dataclasses import dataclass
 
@@ -49,7 +46,7 @@ class PurchaseOrder:
 
     @property
     def total_cost(self) -> float:
-        """Quantity times unit price, in rupees."""
+        """Quantity multiplied by unit price."""
         return self.quantity * self.unit_price
 
     def advance(self, new_status: str) -> None:
@@ -83,11 +80,14 @@ def create_purchase_order(
     if not isinstance(po_id, str) or not po_id.strip():
         raise ValueError("po_id must be a non-empty string")
 
-    if not _is_int(quantity) or not 1 <= quantity <= supplier.max_order_qty:
+    if (
+        not _is_int(quantity)
+        or not 1 <= quantity <= supplier.max_order_qty
+    ):
         raise ValueError(
             f"quantity must be a whole number from 1 to "
-            f"{supplier.max_order_qty} "
-            f"for supplier {supplier.supplier_id}, got {quantity!r}"
+            f"{supplier.max_order_qty} for supplier "
+            f"{supplier.supplier_id}, got {quantity!r}"
         )
 
     try:
@@ -112,12 +112,17 @@ class PurchaseOrderBook:
     """Create and track purchase orders."""
 
     def __init__(self):
-        """Initialize an empty purchase order book."""
         self.orders = []
         self._next_id = 1
 
-    def place(self, supplier, product_id, quantity, order_day):
-        """Create and register a purchase order."""
+    def place(
+        self,
+        supplier: Supplier,
+        product_id: str,
+        quantity: int,
+        order_day: int,
+    ) -> PurchaseOrder:
+        """Create, register, and dispatch a purchase order."""
         po_id = f"PO-{self._next_id:04d}"
 
         order = create_purchase_order(
@@ -128,12 +133,22 @@ class PurchaseOrderBook:
             order_day=order_day,
         )
 
+        order.advance(IN_TRANSIT)
+
         self.orders.append(order)
         self._next_id += 1
 
         return order
 
-    def due_on(self, day):
+    def get(self, po_id: str) -> PurchaseOrder:
+        """Retrieve an order by ID; raise KeyError if it does not exist."""
+        for order in self.orders:
+            if order.po_id == po_id:
+                return order
+
+        raise KeyError(f"unknown purchase order ID: {po_id}")
+
+    def due_on(self, day: int) -> list:
         """Return outstanding orders due on or before the given day."""
         if not _is_int(day) or day < 0:
             raise ValueError("day must be a non-negative integer")
@@ -148,11 +163,15 @@ class PurchaseOrderBook:
             key=lambda order: order.po_id,
         )
 
-    def on_order_qty(self, product_id):
-        """Return the outstanding quantity for a product."""
+    def on_order_qty(self, product_id: str) -> int:
+        """Return outstanding quantity for the specified product."""
         return sum(
             order.quantity
             for order in self.orders
             if order.product_id == product_id
             and order.status in (PLACED, IN_TRANSIT)
         )
+
+    def all_orders(self) -> list:
+        """Return all purchase orders in insertion order."""
+        return list(self.orders)

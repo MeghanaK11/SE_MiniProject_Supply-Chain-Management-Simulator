@@ -23,24 +23,24 @@ SAMPLE_CONFIG = (
 
 
 def sample_supplier(supplier_id):
-    """Build the real Supplier from the sample configuration."""
+    """Build a real Supplier from the sample configuration."""
     with open(SAMPLE_CONFIG, encoding="utf-8") as file:
         entries = json.load(file)["suppliers"]
 
-    return Supplier.from_dict(
-        next(
-            entry for entry in entries
-            if entry["supplier_id"] == supplier_id
-        )
+    entry = next(
+        entry for entry in entries
+        if entry["supplier_id"] == supplier_id
     )
+
+    return Supplier.from_dict(entry)
 
 
 # --------------------------------------------------
-# B-14: Purchase Order Creation (Rushmitha's tests)
+# B-14: Purchase Order Creation
 # --------------------------------------------------
 
 def test_po_delivery_day():
-    """TC-PO-01: Three-day lead time, order day 5 gives delivery day 8."""
+    """TC-PO-01: Three-day lead time gives delivery day 8."""
     po = create_purchase_order(
         "PO-0001", sample_supplier("S-001"), "P-001", 100, 5
     )
@@ -49,12 +49,15 @@ def test_po_delivery_day():
     assert po.order_day == 5
     assert po.status == PLACED
     assert (
-        po.po_id, po.supplier_id, po.product_id, po.quantity
+        po.po_id,
+        po.supplier_id,
+        po.product_id,
+        po.quantity,
     ) == ("PO-0001", "S-001", "P-001", 100)
 
 
 def test_po_total_cost():
-    """TC-PO-02: 100 units of P-001 from S-001 cost Rs 11,000."""
+    """TC-PO-02: Verify total purchase order cost."""
     po = create_purchase_order(
         "PO-0001", sample_supplier("S-001"), "P-001", 100, 5
     )
@@ -64,11 +67,13 @@ def test_po_total_cost():
 
 
 def test_po_over_capacity_rejected():
-    """TC-PO-03: Reject quantity above supplier maximum."""
+    """TC-PO-03: Reject quantities above supplier capacity."""
     supplier = sample_supplier("S-002")
 
     with pytest.raises(ValueError, match="quantity"):
-        create_purchase_order("PO-0001", supplier, "P-001", 201, 1)
+        create_purchase_order(
+            "PO-0001", supplier, "P-001", 201, 1
+        )
 
     assert create_purchase_order(
         "PO-0002", supplier, "P-001", 200, 1
@@ -76,7 +81,7 @@ def test_po_over_capacity_rejected():
 
 
 def test_po_product_not_supplied():
-    """TC-PO-04: Reject a product not supplied by the selected supplier."""
+    """TC-PO-04: Reject products not sold by the supplier."""
     with pytest.raises(ValueError, match="P-003"):
         create_purchase_order(
             "PO-0001", sample_supplier("S-001"), "P-003", 10, 1
@@ -85,7 +90,7 @@ def test_po_product_not_supplied():
 
 @pytest.mark.parametrize("bad_qty", [0, -5, 2.5, True])
 def test_po_zero_quantity(bad_qty):
-    """TC-PO-05: Reject invalid quantities and blank purchase order IDs."""
+    """TC-PO-05: Reject invalid quantities and blank PO IDs."""
     supplier = sample_supplier("S-001")
 
     with pytest.raises(ValueError, match="quantity"):
@@ -104,7 +109,7 @@ def test_po_zero_quantity(bad_qty):
 # --------------------------------------------------
 
 def test_po_valid_lifecycle_transitions():
-    """TC-PO-06: Allow PLACED -> IN_TRANSIT -> DELIVERED."""
+    """TC-PO-06: Allow valid purchase order status transitions."""
     po = create_purchase_order(
         "PO-0001", sample_supplier("S-001"), "P-001", 10, 5
     )
@@ -119,7 +124,7 @@ def test_po_valid_lifecycle_transitions():
 
 
 def test_po_invalid_lifecycle_transitions():
-    """TC-PO-07: Reject invalid transitions and terminal-state changes."""
+    """TC-PO-07: Reject invalid and terminal-state transitions."""
     po = create_purchase_order(
         "PO-0001", sample_supplier("S-001"), "P-001", 10, 5
     )
@@ -137,41 +142,8 @@ def test_po_invalid_lifecycle_transitions():
     assert po.status == CANCELLED
 
 
-def test_po_on_order_quantity_excludes_closed_orders():
-    """TC-PO-08: Exclude delivered and cancelled orders from on-order quantity."""
-    book = PurchaseOrderBook()
-    supplier = sample_supplier("S-001")
-
-    delivered = book.place(supplier, "P-001", 20, 1)
-    cancelled = book.place(supplier, "P-001", 10, 2)
-    outstanding = book.place(supplier, "P-001", 15, 3)
-
-    delivered.advance(IN_TRANSIT)
-    delivered.advance(DELIVERED)
-
-    cancelled.advance(CANCELLED)
-
-    assert book.on_order_qty("P-001") == 15
-
-    outstanding.advance(IN_TRANSIT)
-    assert book.on_order_qty("P-001") == 15
-
-
-def test_po_released_only_on_expected_delivery_day():
-    """TC-PO-09: An order due on day 8 is absent on day 7 and present on day 8."""
-    book = PurchaseOrderBook()
-    supplier = sample_supplier("S-001")
-
-    # S-001 has a three-day lead time.
-    po = book.place(supplier, "P-001", 10, 5)
-
-    assert po.expected_delivery_day == 8
-    assert po not in book.due_on(7)
-    assert po in book.due_on(8)
-
-
 def test_po_book_generates_sequential_ids():
-    """TC-PO-10: Generate sequential IDs and retain orders in the book."""
+    """TC-PO-08: Generate sequential IDs and retain orders."""
     book = PurchaseOrderBook()
     supplier = sample_supplier("S-001")
 
@@ -181,6 +153,47 @@ def test_po_book_generates_sequential_ids():
     assert first.po_id == "PO-0001"
     assert second.po_id == "PO-0002"
 
-    assert book.orders == [first, second]
-    assert first.status == PLACED
-    assert second.status == PLACED
+    assert first.status == IN_TRANSIT
+    assert second.status == IN_TRANSIT
+
+    assert book.get("PO-0001") is first
+    assert book.get("PO-0002") is second
+    assert book.all_orders() == [first, second]
+
+    with pytest.raises(KeyError):
+        book.get("PO-9999")
+
+
+def test_po_due_on():
+    """TC-PO-09: Return outstanding orders due by the specified day."""
+    book = PurchaseOrderBook()
+    supplier = sample_supplier("S-001")
+
+    po = book.place(supplier, "P-001", 10, 5)
+
+    assert po.expected_delivery_day == 8
+    assert po not in book.due_on(7)
+    assert po in book.due_on(8)
+
+    po.advance(DELIVERED)
+
+    assert po not in book.due_on(8)
+
+
+def test_po_on_order_quantity_excludes_closed_orders():
+    """TC-PO-10: Exclude delivered and cancelled orders."""
+    book = PurchaseOrderBook()
+    supplier = sample_supplier("S-001")
+
+    delivered = book.place(supplier, "P-001", 20, 1)
+    cancelled = book.place(supplier, "P-001", 10, 2)
+    outstanding = book.place(supplier, "P-001", 15, 3)
+
+    delivered.advance(DELIVERED)
+    cancelled.advance(CANCELLED)
+
+    assert book.on_order_qty("P-001") == 15
+
+    outstanding.advance(DELIVERED)
+
+    assert book.on_order_qty("P-001") == 0
