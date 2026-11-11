@@ -1,4 +1,64 @@
+
+"""Inventory rules for the supply chain simulator.
+
+Includes:
+- B-06: Economic Order Quantity (EOQ)
+- B-07: Warehouse stock management
+- B-16: Safety stock and reorder point
+"""
+
 import math
+
+
+def _check_number(name: str, value) -> None:
+    """Reject bool, text, NaN and infinity; only finite ints and floats pass."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ValueError(f"{name} must be a finite number, got {value!r}")
+
+
+def economic_order_quantity(
+    annual_demand: float,
+    order_cost: float,
+    annual_holding_cost_per_unit: float,
+) -> int:
+    """Calculate EOQ using ceil(sqrt(2 * D * S / H))."""
+    _check_number("annual_demand", annual_demand)
+    _check_number("order_cost", order_cost)
+    _check_number(
+        "annual_holding_cost_per_unit",
+        annual_holding_cost_per_unit,
+    )
+
+    if annual_holding_cost_per_unit <= 0:
+        raise ValueError(
+            "annual_holding_cost_per_unit must be greater than 0, "
+            f"got {annual_holding_cost_per_unit!r}"
+        )
+
+    if annual_demand < 0:
+        raise ValueError(
+            f"annual_demand must be 0 or more, got {annual_demand!r}"
+        )
+
+    if order_cost < 0:
+        raise ValueError(
+            f"order_cost must be 0 or more, got {order_cost!r}"
+        )
+
+    if annual_demand == 0:
+        return 0
+
+    root = math.sqrt(
+        2 * annual_demand * order_cost
+        / annual_holding_cost_per_unit
+    )
+
+    # Avoid floating-point noise causing an unnecessary round-up.
+    return math.ceil(round(root, 9))
 
 
 class Warehouse:
@@ -23,7 +83,9 @@ class Warehouse:
                 raise ValueError("Product ID must be a non-empty string")
 
             if type(quantity) is not int or quantity < 0:
-                raise ValueError("Initial stock must be a non-negative integer")
+                raise ValueError(
+                    "Initial stock must be a non-negative integer"
+                )
 
             self._stock[product_id] = quantity
 
@@ -41,7 +103,6 @@ class Warehouse:
 
         available = self._stock.get(product_id, 0)
         shipped = min(qty, available)
-
         self._stock[product_id] = available - shipped
 
         return shipped
@@ -57,26 +118,31 @@ class Warehouse:
     def needs_reorder(self, product_id, reorder_point, on_order):
         """Check whether stock plus outstanding orders has reached reorder point."""
         if type(reorder_point) is not int or reorder_point < 0:
-            raise ValueError("Reorder point must be a non-negative integer")
+            raise ValueError(
+                "Reorder point must be a non-negative integer"
+            )
 
         if type(on_order) is not int or on_order < 0:
-            raise ValueError("On-order quantity must be a non-negative integer")
+            raise ValueError(
+                "On-order quantity must be a non-negative integer"
+            )
 
-        return self.stock_level(product_id) + on_order <= reorder_point
+        return (
+            self.stock_level(product_id) + on_order
+            <= reorder_point
+        )
 
 
 def safety_stock(z, demand_std_per_day, lead_time_days):
-    """Calculate safety stock and round it up to the next whole unit."""
-    if (
-        isinstance(z, bool)
-        or isinstance(demand_std_per_day, bool)
-        or isinstance(lead_time_days, bool)
-        or not isinstance(z, (int, float))
-        or not isinstance(demand_std_per_day, (int, float))
-        or not isinstance(lead_time_days, (int, float))
-        or z < 0
-        or demand_std_per_day < 0
-        or lead_time_days < 0
+    """Calculate safety stock and round up to the next whole unit."""
+    values = (z, demand_std_per_day, lead_time_days)
+
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+        for value in values
     ):
         raise ValueError("Inputs must be non-negative numbers")
 
@@ -86,12 +152,17 @@ def safety_stock(z, demand_std_per_day, lead_time_days):
 
 
 def reorder_point(avg_daily_demand, lead_time_days, safety_stock_units):
-    """Calculate reorder point and round it up to the next whole unit."""
-    values = (avg_daily_demand, lead_time_days, safety_stock_units)
+    """Calculate reorder point and round up to the next whole unit."""
+    values = (
+        avg_daily_demand,
+        lead_time_days,
+        safety_stock_units,
+    )
 
     if any(
         isinstance(value, bool)
         or not isinstance(value, (int, float))
+        or not math.isfinite(value)
         or value < 0
         for value in values
     ):
