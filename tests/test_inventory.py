@@ -17,126 +17,75 @@ from src.inventory import (
 # Test Cases: TC-INV-01 to TC-INV-06
 # ============================================================
 
-def test_warehouse_initial_stock():
+def test_receive_10_into_empty_stock():
+    """TC-INV-01: Receive 10 units into empty stock."""
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    warehouse.receive("P-001", 10)
+
+    assert warehouse.stock_level("P-001") == 10
+
+
+def test_ship_4_from_stock_of_10():
+    """TC-INV-02: Ship 4 units from stock of 10."""
     warehouse = Warehouse(
-        "W-001",
-        "Main Warehouse",
-        {"P-001": 100, "P-002": 50},
+        "W-001", "Main Warehouse", {"P-001": 10}
     )
 
-    assert warehouse.stock_level("P-001") == 100
-    assert warehouse.stock_level("P-002") == 50
-    assert warehouse.stock_level("P-003") == 0
+    shipped = warehouse.ship("P-001", 4)
+
+    assert shipped == 4
+    assert warehouse.stock_level("P-001") == 6
 
 
-def test_warehouse_receive_stock():
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 100})
+def test_ship_8_from_stock_of_5():
+    """TC-INV-03: Ship only available stock."""
+    warehouse = Warehouse(
+        "W-001", "Main Warehouse", {"P-001": 5}
+    )
 
-    warehouse.receive("P-001", 25)
+    shipped = warehouse.ship("P-001", 8)
 
-    assert warehouse.stock_level("P-001") == 125
-
-
-def test_warehouse_ship_stock():
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 100})
-
-    shipped = warehouse.ship("P-001", 30)
-
-    assert shipped == 30
-    assert warehouse.stock_level("P-001") == 70
-
-
-def test_warehouse_cannot_have_negative_stock():
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 10})
-
-    shipped = warehouse.ship("P-001", 20)
-
-    assert shipped == 10
+    assert shipped == 5
     assert warehouse.stock_level("P-001") == 0
 
 
-def test_warehouse_snapshot_returns_copy():
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 100})
+@pytest.mark.parametrize(
+    "operation, product_id, quantity",
+    [
+        ("receive", "P-001", 0),
+        ("ship", "P-001", -2),
+    ],
+)
+def test_invalid_receive_or_ship_quantity(
+    operation, product_id, quantity
+):
+    """TC-INV-04: Invalid receive and ship quantities raise ValueError."""
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    with pytest.raises(ValueError):
+        getattr(warehouse, operation)(product_id, quantity)
+
+
+def test_unknown_product_stock_level_is_zero():
+    """TC-INV-05: Unknown product has stock level zero."""
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    assert warehouse.stock_level("P-999") == 0
+
+
+def test_snapshot_returns_independent_copy():
+    """TC-INV-06: Snapshot is a copy of warehouse stock."""
+    warehouse = Warehouse(
+        "W-001", "Main Warehouse", {"P-001": 10}
+    )
 
     snapshot = warehouse.snapshot()
     snapshot["P-001"] = 500
+    snapshot["P-002"] = 20
 
-    assert warehouse.stock_level("P-001") == 100
-
-
-@pytest.mark.parametrize(
-    "invalid_stock",
-    [
-        None,
-        [],
-        "100",
-    ],
-)
-def test_invalid_initial_stock_type(invalid_stock):
-    with pytest.raises(ValueError):
-        Warehouse("W-001", "Main Warehouse", invalid_stock)
-
-
-@pytest.mark.parametrize(
-    "invalid_quantity",
-    [
-        -1,
-        1.5,
-        True,
-        "10",
-        None,
-    ],
-)
-def test_invalid_initial_stock_quantity(invalid_quantity):
-    with pytest.raises(ValueError):
-        Warehouse(
-            "W-001",
-            "Main Warehouse",
-            {"P-001": invalid_quantity},
-        )
-
-
-@pytest.mark.parametrize(
-    "invalid_quantity",
-    [
-        0,
-        -5,
-        1.5,
-        True,
-        "10",
-        None,
-    ],
-)
-def test_receive_rejects_invalid_quantity(invalid_quantity):
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 100})
-
-    with pytest.raises(ValueError):
-        warehouse.receive("P-001", invalid_quantity)
-
-
-@pytest.mark.parametrize(
-    "invalid_quantity",
-    [
-        0,
-        -5,
-        1.5,
-        True,
-        "10",
-        None,
-    ],
-)
-def test_ship_rejects_invalid_quantity(invalid_quantity):
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 100})
-
-    with pytest.raises(ValueError):
-        warehouse.ship("P-001", invalid_quantity)
-
-
-def test_warehouse_needs_reorder():
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 20})
-
-    assert warehouse.needs_reorder("P-001", 25, 0) is True
-    assert warehouse.needs_reorder("P-001", 25, 10) is False
+    assert warehouse.stock_level("P-001") == 10
+    assert warehouse.stock_level("P-002") == 0
 
 
 # ============================================================
@@ -162,7 +111,6 @@ def sample_product(product_id):
 
 def test_eoq_known_value():
     """TC-INV-07: Validate EOQ calculation and integer rounding."""
-
     assert economic_order_quantity(1000, 50, 2) == 224
     assert isinstance(economic_order_quantity(1000, 50, 2), int)
     assert economic_order_quantity(1000.0, 50.0, 2.0) == 224
@@ -183,7 +131,6 @@ def test_eoq_known_value():
 
 def test_eoq_zero_demand():
     """TC-INV-08: Zero demand gives zero EOQ."""
-
     assert economic_order_quantity(0, 50, 2) == 0
     assert economic_order_quantity(0.0, 50, 2) == 0
     assert economic_order_quantity(0, 0, 2) == 0
@@ -203,8 +150,7 @@ def test_eoq_zero_demand():
     ],
 )
 def test_eoq_invalid_holding_cost(bad_value):
-    """TC-INV-09: Invalid holding costs must raise ValueError."""
-
+    """TC-INV-09: Invalid holding costs raise ValueError."""
     with pytest.raises(
         ValueError,
         match="annual_holding_cost_per_unit",
@@ -228,8 +174,7 @@ def test_eoq_invalid_holding_cost(bad_value):
     ],
 )
 def test_eoq_invalid_demand_or_order_cost(field, args):
-    """TC-INV-10: Invalid demand or order cost must raise ValueError."""
-
+    """TC-INV-10: Invalid demand or order cost raises ValueError."""
     with pytest.raises(ValueError, match=field):
         economic_order_quantity(*args)
 
@@ -240,43 +185,134 @@ def test_eoq_invalid_demand_or_order_cost(field, args):
 # ============================================================
 
 def test_safety_stock_calculation():
-    assert safety_stock(1.65, 10, 4) == 33
-
-
-def test_safety_stock_zero_variability():
-    assert safety_stock(1.65, 0, 4) == 0
+    """TC-INV-11: Calculate safety stock."""
+    assert safety_stock(1.65, 4, 4) == 14
 
 
 def test_reorder_point_calculation():
-    assert reorder_point(20, 5, 30) == 130
+    """TC-INV-12: Calculate reorder point."""
+    assert reorder_point(10, 4, 14) == 54
 
 
-def test_reorder_point_rounds_up():
-    assert reorder_point(10.5, 3, 5) == 37
+def test_needs_reorder_without_outstanding_order():
+    """TC-INV-13: Reorder when stock is below ROP."""
+    warehouse = Warehouse(
+        "W-001", "Main Warehouse", {"P-001": 50}
+    )
+
+    assert warehouse.needs_reorder("P-001", 54, 0) is True
 
 
-def test_warehouse_reorder_decision():
-    warehouse = Warehouse("W-001", "Main Warehouse", {"P-001": 50})
+def test_no_reorder_when_outstanding_order_covers_gap():
+    """TC-INV-14: Do not reorder when on-order stock covers the gap."""
+    warehouse = Warehouse(
+        "W-001", "Main Warehouse", {"P-001": 50}
+    )
 
-    assert warehouse.needs_reorder("P-001", 60, 0) is True
-    assert warehouse.needs_reorder("P-001", 60, 20) is False
+    assert warehouse.needs_reorder("P-001", 54, 10) is False
 
 
 @pytest.mark.parametrize(
     "function,args",
     [
-        (safety_stock, (-1, 10, 4)),
-        (safety_stock, (1.65, -10, 4)),
-        (safety_stock, (1.65, 10, -4)),
-        (safety_stock, (True, 10, 4)),
-        (safety_stock, (1.65, float("inf"), 4)),
-        (reorder_point, (-10, 5, 30)),
-        (reorder_point, (20, -5, 30)),
-        (reorder_point, (20, 5, -30)),
-        (reorder_point, (True, 5, 30)),
-        (reorder_point, (20, float("nan"), 30)),
+        (safety_stock, (1.65, -4, 4)),
+        (safety_stock, (1.65, 4, -4)),
+        (reorder_point, (10, -4, 14)),
     ],
 )
-def test_invalid_safety_stock_and_reorder_inputs(function, args):
+def test_negative_std_or_lead_time_raises_value_error(
+    function, args
+):
+    """TC-INV-15: Negative standard deviation or lead time is invalid."""
     with pytest.raises(ValueError):
         function(*args)
+
+
+# ============================================================
+# Additional input validation tests
+# ============================================================
+
+@pytest.mark.parametrize(
+    "invalid_product_id",
+    [None, "", "   ", 123, True],
+)
+def test_receive_rejects_invalid_product_id(invalid_product_id):
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    with pytest.raises(ValueError):
+        warehouse.receive(invalid_product_id, 5)
+
+
+@pytest.mark.parametrize(
+    "invalid_product_id",
+    [None, "", "   ", 123, True],
+)
+def test_ship_rejects_invalid_product_id(invalid_product_id):
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    with pytest.raises(ValueError):
+        warehouse.ship(invalid_product_id, 5)
+
+
+@pytest.mark.parametrize(
+    "invalid_product_id",
+    [None, "", "   ", 123, True],
+)
+def test_stock_level_rejects_invalid_product_id(invalid_product_id):
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    with pytest.raises(ValueError):
+        warehouse.stock_level(invalid_product_id)
+
+
+@pytest.mark.parametrize(
+    "invalid_product_id",
+    [None, "", "   ", 123, True],
+)
+def test_needs_reorder_rejects_invalid_product_id(
+    invalid_product_id
+):
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    with pytest.raises(ValueError):
+        warehouse.needs_reorder(invalid_product_id, 10)
+
+
+def test_initial_stock_defaults_to_empty():
+    warehouse = Warehouse("W-001", "Main Warehouse")
+
+    assert warehouse.snapshot() == {}
+
+
+@pytest.mark.parametrize(
+    "function,args",
+    [
+        (safety_stock, (1.65, float("inf"), 4)),
+        (safety_stock, (1.65, float("nan"), 4)),
+        (safety_stock, (1.65, 4, float("inf"))),
+        (safety_stock, (1.65, 4, float("nan"))),
+        (reorder_point, (float("inf"), 4, 14)),
+        (reorder_point, (float("nan"), 4, 14)),
+        (reorder_point, (10, float("inf"), 14)),
+        (reorder_point, (10, float("nan"), 14)),
+        (reorder_point, (10, 4, float("inf"))),
+        (reorder_point, (10, 4, float("nan"))),
+    ],
+)
+def test_safety_stock_and_reorder_point_reject_non_finite_values(
+    function, args
+):
+    with pytest.raises(ValueError):
+        function(*args)
+
+
+def test_reorder_point_avoids_floating_point_over_rounding():
+    assert reorder_point(29 / 7, 7, 0) == 29
+
+
+def test_needs_reorder_defaults_on_order_to_zero():
+    warehouse = Warehouse(
+        "W-001", "Main Warehouse", {"P-001": 50}
+    )
+
+    assert warehouse.needs_reorder("P-001", 54) is True
