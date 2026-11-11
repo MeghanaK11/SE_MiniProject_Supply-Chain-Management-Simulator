@@ -20,9 +20,23 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install requirements
         run: pip install -r requirements.txt
 
-      - name: Run tests
-        run: python -m pytest -v
+      - name: Run tests with coverage
+        timeout-minutes: 3
+        run: >
+          python -m pytest -v --cov=src --cov-branch
+          --cov-report=term-missing --cov-report=xml
+          --junitxml=test-results.xml --cov-fail-under=80
+
+      - name: Upload test and coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage
+          path: |
+            coverage.xml
+            test-results.xml
