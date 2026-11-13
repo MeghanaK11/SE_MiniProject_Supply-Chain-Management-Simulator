@@ -1,20 +1,23 @@
-"""Simulation engine MVP for the supply chain simulator (SCM-F-035).
+"""Simulation engine for the supply chain simulator (SCM-F-035).
 
-Runs the warehouse day by day. This increment has no costs, delays, transport
-or KPIs; those are added in engine v2.
+Runs the warehouse day by day and returns the daily records, the event log,
+the KPIs and the cost breakdown. Supplier delays and transport cost are not
+included yet, so transport cost stays at 0.
 """
 import random
 from dataclasses import dataclass, field
 
 from src.clock import EventLog, SimulationClock
+from src.costs import CostTracker
 from src.demand import DemandGenerator
-from src.forecasting import demand_std, moving_average
+from src.forecasting import demand_std, mean_absolute_error, moving_average
 from src.inventory import (
     Warehouse,
     economic_order_quantity,
     reorder_point,
     safety_stock,
 )
+from src.kpis import compute_kpis
 from src.orders import OrderBook
 from src.products import ProductCatalog
 from src.purchase_orders import DELIVERED, PurchaseOrderBook
@@ -25,13 +28,12 @@ DAYS_PER_YEAR = 365
 
 @dataclass
 class SimulationResult:
-    """What a run returns: one record per product per day, the event log and the PO list."""
+    """What a run returns: daily records, the event log, the KPIs and the cost breakdown."""
 
     daily_records: list
-    events: list
+    events: EventLog
     kpis: dict = field(default_factory=dict)
     costs: dict = field(default_factory=dict)
-    purchase_orders: list = field(default_factory=list)
 
 
 class SupplyChainSimulation:
@@ -54,6 +56,7 @@ class SupplyChainSimulation:
         self.po_book = PurchaseOrderBook()
         self.clock = SimulationClock(self.days)
         self.log = EventLog()
+        self.costs = CostTracker()
 
         self.product_ids = sorted(p.product_id for p in self.catalog.list_all())
         self.generators = {
@@ -62,16 +65,22 @@ class SupplyChainSimulation:
         }
         self.history = {pid: [] for pid in self.product_ids}
         self.daily_records = []
+        self._last_forecast = {}
+        self._forecast_actuals = []
+        self._forecast_values = []
 
     def run(self) -> SimulationResult:
         """Run every day and return the result."""
         while not self.clock.is_finished():
             self._run_day(self.clock.current_day)
             self.clock.advance()
+        mae = (mean_absolute_error(self._forecast_actuals, self._forecast_values)
+               if self._forecast_actuals else 0.0)
         return SimulationResult(
             daily_records=self.daily_records,
-            events=self.log.events(),
-            purchase_orders=self.po_book.all_orders(),
+            events=self.log,
+            kpis=compute_kpis(self.daily_records, self.catalog.list_all(), mae),
+            costs=self.costs.breakdown(),
         )
 
     def _run_day(self, day: int) -> None:
@@ -81,7 +90,7 @@ class SupplyChainSimulation:
             shipped = self._fulfil(product_id, day)
             forecast = self._forecast(product_id, demand)
             self._reorder(product_id, day, forecast)
-            self.daily_records.append({
+            record = {
                 "day": day,
                 "product_id": product_id,
                 "demand": demand,
@@ -90,7 +99,11 @@ class SupplyChainSimulation:
                 "backorder": self.order_book.backorder_qty(product_id),
                 "on_order": self.po_book.on_order_qty(product_id),
                 "forecast": forecast,
-            })
+            }
+            self.daily_records.append(record)
+            product = self.catalog.get(product_id)
+            self.costs.add_holding_cost(record["stock_end"], product)
+            self.costs.add_stockout_cost(record["backorder"], product)
 
     def _receive_due_orders(self, day: int) -> None:
         """Step 1: deliver every purchase order that is due."""
@@ -126,8 +139,13 @@ class SupplyChainSimulation:
 
     def _forecast(self, product_id: str, demand: int) -> float:
         """Step 4: moving average of recent demand (exponential smoothing comes in v2)."""
+        if product_id in self._last_forecast:
+            self._forecast_actuals.append(demand)
+            self._forecast_values.append(self._last_forecast[product_id])
         self.history[product_id].append(demand)
-        return float(moving_average(self.history[product_id], self.policy["forecast_window"]))
+        forecast = float(moving_average(self.history[product_id], self.policy["forecast_window"]))
+        self._last_forecast[product_id] = forecast
+        return forecast
 
     def _reorder(self, product_id: str, day: int, forecast: float) -> None:
         """Step 5: pick a supplier and place an EOQ-sized order if stock is low."""
@@ -150,6 +168,8 @@ class SupplyChainSimulation:
         )
         quantity = max(1, min(eoq, supplier.max_order_qty))
         order = self.po_book.place(supplier, product_id, quantity, day)
+        self.costs.add_ordering_cost(product)
+        self.costs.add_purchase_cost(quantity, order.unit_price)
         self.log.record(
             day, "PO_PLACED",
             f"{order.po_id} {supplier.supplier_id} {product_id} {quantity} units, "
