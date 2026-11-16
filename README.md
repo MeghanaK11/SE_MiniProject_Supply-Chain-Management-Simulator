@@ -89,27 +89,29 @@ Results on `main` at commit `39db368`, 30 days, seed 42:
 Unreliable suppliers is the only scenario that lowers service level: three deliveries arrive late and cause backorders. The other two show their effect in total cost.
 
 ## Running the tests
-
-```bash
-python -m pytest
-```
-
-That runs all 410 tests. The non-functional tests are marked `nfr`, so the groups can also be run separately:
+Run unit tests:
 
 ```bash
 python -m pytest -m "not system and not nfr"
+```
+
+Run system tests:
+
+```bash
+python -m pytest -m system
+```
+
+Run NFR tests:
+
+```bash
 python -m pytest -m nfr
 ```
 
-The first command runs the unit and integration tests (407), the second the performance, repeatability and standard-library-only checks (3).
-
-To measure coverage the way CI does:
+Run all tests:
 
 ```bash
-python -m pytest --cov=src --cov-branch --cov-report=term-missing
-```
-
-GitHub Actions runs this on every pull request and every push to `main`, and fails the build below 80% coverage.
+python -m pytest
+```<img width="1431" height="185" alt="image" src="https://github.com/user-attachments/assets/e1acb2d6-d18d-4397-b40d-db15f4242d9f" />
 
 ## Documentation
 
