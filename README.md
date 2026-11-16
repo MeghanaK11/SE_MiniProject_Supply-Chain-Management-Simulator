@@ -57,11 +57,21 @@ pip install -r requirements.txt
 
 ## Running the Simulator
 
+
+## Running the Simulator
+
 Run the simulator for 30 days:
 
 ```bash
-python -m src.main --days 30
+python -m src.main --config data/scenarios/sample_config.json --days 30 --out output/results.csv
 ```
+
+- `--config`: Path to the scenario JSON configuration file.
+- `--days`: Number of days to simulate.
+- `--out`: Path where the daily CSV results are saved.
+
+By default, results are written to `output/results.csv`.
+
 
 ## Running Tests
 
