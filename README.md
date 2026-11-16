@@ -65,13 +65,25 @@ python -m src.main --days 30
 
 ## Running Tests
 
-Run all tests:
+
+Run unit tests:
 
 ```bash
-python -m pytest -v
+python -m pytest -m "not system and not nfr"
 ```
 
-Unit tests, system tests and non-functional requirement (NFR) tests are included in the test suite.
+Run system tests:
+
+```bash
+python -m pytest -m system
+```
+
+Run non-functional requirement (NFR) tests:
+
+```bash
+python -m pytest -m nfr
+```
+
 
 ## Demo Scenarios
 
