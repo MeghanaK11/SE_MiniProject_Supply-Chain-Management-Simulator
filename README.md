@@ -13,7 +13,7 @@ This is a Software Engineering mini project.
 | Kallepalli Sai Meghana | Repository owner, Scrum Master |
 | D R Rushmitha | QA Lead, Developer |
 | Siri Krishna C R | Developer |
-| Spoorthi Poomachandra | Developer |
+| Spoorthi Poornachandra | Developer |
 | Shraddha | Developer |
 
 ## Requirements
