@@ -75,13 +75,32 @@ Unit tests, system tests and non-functional requirement (NFR) tests are included
 
 ## Demo Scenarios
 
-The demo scenario files are available in:
 
-```text
-data/scenarios/
+The demo scenario files are available in `data/scenarios/`.
+
+Run each scenario using:
+
+```bash
+python -m src.main --config data/scenarios/sample_config.json
+python -m src.main --config data/scenarios/high_demand.json
+python -m src.main --config data/scenarios/unreliable_suppliers.json
+python -m src.main --config data/scenarios/exp_smoothing.json
 ```
 
-Use the available scenario configurations to demonstrate different simulator behaviours.
+### Scenario Results
+
+Results on `main` at commit `39db368`, 30 days, seed 42.
+
+| Scenario | What changes | Fill rate | Service level | Total cost (Rs) |
+|---|---|---:|---:|---:|
+| sample_config.json (baseline) | Nothing | 100.00% | 100.00% | 507,543.50 |
+| high_demand.json | P-001 base demand 20 to 40 | 100.00% | 100.00% | 585,220.50 |
+| unreliable_suppliers.json | Every supplier reliability 0.5 | 100.00% | 93.33% | 510,653.10 |
+| exp_smoothing.json | Exponential smoothing, alpha 0.5 | 100.00% | 100.00% | 521,369.50 |
+
+Unreliable suppliers is the only scenario that lowers service level (three delayed deliveries). The other two show their effect in total cost.
+
+
 
 ## Project Documentation
 
