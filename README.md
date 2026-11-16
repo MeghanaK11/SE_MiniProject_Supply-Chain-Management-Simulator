@@ -141,4 +141,4 @@ Direct pushes to the main branch are blocked.
 
 ## Project Board
 
-See the GitHub project board for task assignments and progress.
+See the See the [SCM Simulator Sprint Board](https://github.com/users/MeghanaK11/projects/3/views/1) for task assignments and progress.
