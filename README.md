@@ -55,8 +55,6 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## Running the Simulator
-
 
 ## Running the Simulator
 
@@ -68,9 +66,10 @@ python -m src.main --config data/scenarios/sample_config.json --days 30 --out ou
 
 - `--config`: Path to the scenario JSON configuration file.
 - `--days`: Number of days to simulate.
-- `--out`: Path where the daily CSV results are saved.
+- `--out`: Path where the CSV results are saved.
 
-By default, results are written to `output/results.csv`.
+The simulator writes a day-by-day CSV report to `output/results.csv`. Each row represents one product for one simulation day.
+
 
 
 ## Running Tests
