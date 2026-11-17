@@ -39,7 +39,7 @@ def read_csv(path) -> list:
 def test_st01_run_simulation_writes_csv_and_summary(tmp_path, capsys):
     """ST-01 (UC-1; F-034, F-035): a 30-day run returns 0, writes header plus 90 rows and prints Fill rate."""
     out = tmp_path / "results.csv"
-    assert main(["--days", "30", "--out", str(out)]) == 0
+    assert main(["--config", str(SAMPLE_CONFIG), "--days", "30", "--out", str(out)]) == 0
     with open(out, newline="", encoding="utf-8") as handle:
         rows = list(csv.reader(handle))
     assert len(rows) == 1 + 90
@@ -50,7 +50,9 @@ def test_st01_run_simulation_writes_csv_and_summary(tmp_path, capsys):
 def test_st02_missing_config_is_one_error_line(tmp_path, capsys):
     """ST-02 (NF-004; F-031): a missing config file returns 2 and stderr starts with Error:."""
     assert main(["--config", str(tmp_path / "missing.json"), "--out", str(tmp_path / "x.csv")]) == 2
-    assert capsys.readouterr().err.startswith("Error:")
+    err = capsys.readouterr().err
+    assert err.startswith("Error:")
+    assert "missing.json" in err
 
 
 @pytest.mark.system
@@ -65,9 +67,11 @@ def test_st03_unknown_product_in_demand_is_rejected(tmp_path, capsys):
 
 @pytest.mark.system
 def test_st04_days_above_limit_is_rejected(tmp_path, capsys):
-    """ST-04 (SR-002): --days 5000 returns 2."""
-    assert main(["--days", "5000", "--out", str(tmp_path / "x.csv")]) == 2
-    assert capsys.readouterr().err.startswith("Error:")
+    """ST-04 (SR-002): --days 5000 returns 2 and the error names simulation.days."""
+    assert main(["--config", str(SAMPLE_CONFIG), "--days", "5000", "--out", str(tmp_path / "x.csv")]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("Error:")
+    assert "simulation.days" in err
 
 
 @pytest.mark.system
