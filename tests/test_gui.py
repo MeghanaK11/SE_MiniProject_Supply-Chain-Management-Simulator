@@ -17,23 +17,33 @@ ROOT = Path(__file__).resolve().parent.parent
 pytestmark = pytest.mark.gui
 
 
-@pytest.fixture
-def window():
+@pytest.fixture(scope="module")
+def tk_root():
+    """One Tk interpreter for the whole module. Creating a new one per test
+    sometimes fails on Windows with "Can't find a usable init.tcl"."""
     try:
         root = tk.Tk()
     except tk.TclError as exc:
         pytest.skip(f"no display available for Tk: {exc}")
     root.withdraw()
+    yield root
+    root.destroy()
+
+
+@pytest.fixture
+def window(tk_root):
+    top = tk.Toplevel(tk_root)
+    top.withdraw()
     errors = []
     saved = {}
     app = gui.SimulatorApp(
-        root,
+        top,
         root_dir=str(ROOT),
         show_error=lambda title, text: errors.append((title, text)),
         ask_save_path=lambda: saved.get("path"),
     )
     yield app, errors, saved
-    root.destroy()
+    top.destroy()
 
 
 def rows(table):
