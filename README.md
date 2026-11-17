@@ -63,10 +63,10 @@ All three options are optional:
 | `--days` | Number of days to simulate | the value in the config |
 | `--out` | Where to write the CSV | `output/results.csv` |
 
-So `python -m src.main` on its own runs the sample scenario. The run prints a summary of KPIs and costs, then writes the CSV with one row per product per day: day, product, demand, shipped, stock at end of day, backorder, quantity on order, and forecast.
+So `python -m src.main` on its own runs the sample scenario. The run prints a summary of KPIs and costs, then writes the CSV with one row per product per day: writes a day-by-day CSV (one file, a row per product per day).day, product, demand, shipped, stock at end of day, backorder, quantity on order, and forecast.
 
 If the config is missing or invalid, the simulator prints a single line starting with `Error:` and exits with code 2.
-
+The default output path is outputs/reports.csv.
 ## Demo scenarios
 
 Each file in `data/scenarios/` changes one thing from `data/sample_config.json`:
@@ -87,7 +87,10 @@ Results on `main` at commit `39db368`, 30 days, seed 42:
 | exp_smoothing.json | Exponential smoothing, alpha 0.5 | 100.00% | 100.00% | 521,369.50 |
 
 Unreliable suppliers is the only scenario that lowers service level: three deliveries arrive late and cause backorders. The other two show their effect in total cost.
-
+- `high_demand.json`: Increases P-001 base demand from 20 to 40.
+- `unreliable_suppliers.json`: Uses unreliable suppliers to demonstrate late deliveries and lower service level.
+- `exp_smoothing.json`: Uses exponential smoothing for demand forecasting.
+  
 ## Running the tests
 Run unit tests:
 
