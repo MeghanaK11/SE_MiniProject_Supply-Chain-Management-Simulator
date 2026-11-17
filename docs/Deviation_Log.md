@@ -2,7 +2,7 @@
 
 Supply Chain Management Simulator, SE mini project. This log records every place where what we built or how we worked differs from the SRS v1.0 (SCM-SRS-001), the SAD v1.0 (SCM-SAD-001), the Test Plan v1.0 or the Team Context Document. SRS v1.1 and SAD v1.1 point to this file in their revision history.
 
-Last updated: 17-11-2026, against main at commit a483a6f (422 tests passing; final engine commit 47f8c6b, PR #78). DV-18 describes the desktop window on branch feat/gui.
+Last updated: 17-11-2026, against main at commit 380fd6a (429 tests passing). The final engine commit is 47f8c6b (PR #78); shipments (PR #90), the system tests (PR #89) and the desktop window (PR #91) were merged on 17-11-2026.
 
 | ID | SRS, SAD or plan said | What we built | Why | Impact | Section updated |
 |----|----|----|----|----|----|
