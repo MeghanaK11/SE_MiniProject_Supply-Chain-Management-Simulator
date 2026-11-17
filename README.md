@@ -1,6 +1,6 @@
 # Supply Chain Management Simulator
 
-A command-line simulator of one warehouse that sells several products to customers and restocks from several suppliers, one day at a time. Each day it receives deliveries, generates customer demand, fills orders oldest first, forecasts demand, and places purchase orders when stock runs low. At the end of a run it prints costs and KPIs and writes a day-by-day CSV.
+A simulator of one warehouse that sells several products to customers and restocks from several suppliers, one day at a time. Each day it receives deliveries, generates customer demand, fills orders oldest first, forecasts demand, and places purchase orders when stock runs low. At the end of a run it shows costs and KPIs and writes a day-by-day CSV. It can be run from the command line or from a desktop window.
 
 Software Engineering mini project, PES University.
 
@@ -63,10 +63,20 @@ All three options are optional:
 | `--days` | Number of days to simulate | the value in the config |
 | `--out` | Where to write the CSV | `output/results.csv` |
 
-So `python -m src.main` on its own runs the sample scenario. The run prints a summary of KPIs and costs, then writes the CSV with one row per product per day: writes a day-by-day CSV (one file, a row per product per day).day, product, demand, shipped, stock at end of day, backorder, quantity on order, and forecast.
+So `python -m src.main` on its own runs the sample scenario. The run prints a summary of KPIs and costs, then writes the CSV with one row per product per day: day, product, demand, shipped, stock at end of day, backorder, quantity on order, and forecast.
 
 If the config is missing or invalid, the simulator prints a single line starting with `Error:` and exits with code 2.
-The default output path is outputs/reports.csv.
+
+## Desktop window
+
+```bash
+python -m src.gui
+```
+
+Pick a scenario from the list (or Browse to any JSON file), optionally type a number of days, and press Run simulation. The Summary tab shows the KPIs, costs and how many events of each type happened, the Stock chart tab plots end-of-day stock for each product, and the Events tab lists every event with a filter by type. Save CSV writes the same day-by-day file as the command line. A bad file or day count shows the same one-line error as the command line, and the window stays open.
+
+The window uses tkinter, which ships with the standard Python installer on Windows and macOS. On Ubuntu or Debian, install it with `sudo apt install python3-tk`.
+
 ## Demo scenarios
 
 Each file in `data/scenarios/` changes one thing from `data/sample_config.json`:
@@ -87,34 +97,31 @@ Results on `main` at commit `39db368`, 30 days, seed 42:
 | exp_smoothing.json | Exponential smoothing, alpha 0.5 | 100.00% | 100.00% | 521,369.50 |
 
 Unreliable suppliers is the only scenario that lowers service level: three deliveries arrive late and cause backorders. The other two show their effect in total cost.
-- `high_demand.json`: Increases P-001 base demand from 20 to 40.
-- `unreliable_suppliers.json`: Uses unreliable suppliers to demonstrate late deliveries and lower service level.
-- `exp_smoothing.json`: Uses exponential smoothing for demand forecasting.
-  
+
 ## Running the tests
-Run unit tests:
-
-```bash
-python -m pytest -m "not system and not nfr"
-```
-
-Run system tests:
-
-```bash
-python -m pytest -m system
-```
-
-Run NFR tests:
-
-```bash
-python -m pytest -m nfr
-```
-
-Run all tests:
 
 ```bash
 python -m pytest
-```<img width="1431" height="185" alt="image" src="https://github.com/user-attachments/assets/e1acb2d6-d18d-4397-b40d-db15f4242d9f" />
+```
+
+That runs every test. Three groups carry markers, so they can also be run on their own:
+
+```bash
+python -m pytest -m system
+python -m pytest -m nfr
+python -m pytest -m gui
+python -m pytest -m "not system and not nfr and not gui"
+```
+
+`system` is the end-to-end validation tests ST-01 to ST-08, `nfr` the performance, repeatability and standard-library-only checks, and `gui` the tests that open the desktop window. The last command runs the unit and integration tests. The `gui` tests need a display; without one they are skipped, and CI runs them under a virtual display (`xvfb-run`).
+
+To measure coverage the way CI does:
+
+```bash
+python -m pytest --cov=src --cov-branch --cov-report=term-missing
+```
+
+GitHub Actions runs this (under `xvfb-run`) on every pull request and every push to `main`, and fails the build below 80% coverage.
 
 ## Documentation
 
@@ -126,6 +133,7 @@ Design documents in `docs/`:
 | Software Architecture and Design | `SAD_v1.0.docx`, `SAD_v1.0.pdf` (submitted), `SAD_v1.1.docx` (updated to match the build) |
 | Software Test Plan | `Test_Plan_v1.0.docx`, `Test_Plan_v1.0.pdf` (submitted), `Test_Plan_v1.1.docx` (updated to match the tests) |
 | Deviation Log | `Deviation_Log.md`: every difference between the documents and the build, and why |
+| Sprint notes | `sprints/sprint1.md`, `sprints/sprint2.md` |
 
 Reports in `docs/reports/`, each with its raw output in a subfolder:
 
