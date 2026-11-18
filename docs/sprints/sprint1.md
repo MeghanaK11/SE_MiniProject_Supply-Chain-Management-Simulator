@@ -10,7 +10,7 @@ The goal was not met inside the sprint. The domain modules were mostly done by S
 
 ## Backlog and outcome
 
-Status and merge dates are taken from the repository history. 29 of the 63 story points were merged by the end of Sunday 8 November.
+Status and merge dates are taken from the repository history. 29 of the 63 story points were merged by the end of Sunday 8 November, and all 63 by Wednesday 18 November.
 
 | Item | What | Owner | Points | Merged | PR |
 |---|---|---|---:|---|---|
@@ -34,8 +34,8 @@ Status and merge dates are taken from the repository history. 29 of the 63 story
 | B-18 | Moving average forecast (SCM-F-024) | Meghana | 2 | Sun 8 Nov | #32 |
 | B-19 | Simulation engine MVP (SCM-F-035) | Spoorthi | 5 | Fri 13 Nov | #64 |
 | B-20 | Command-line interface MVP (SCM-F-035) | Spoorthi | 3 | Fri 13 Nov | #64 |
-| B-21 | Sprint 1 demo video | Siri | 1 | Not delivered | |
-| B-22 | Sprint 1 notes (this file) | Shraddha | 1 | In review | |
+| B-21 | Sprint 1 demo video | Siri | 1 | Wed 18 Nov | docs/videos/sprint1_demo.mp4 |
+| B-22 | Sprint 1 notes (this file) | Shraddha | 1 | Tue 17 Nov | #87 |
 | B-42 | SRS, SAD and Test Plan v1.0 in docs/ | Shraddha | 1 | Wed 11 Nov | #52 |
 
 CI with pinned requirements, pytest settings and the sample scenario went in first, on Saturday 7 November (PR #1).
@@ -46,6 +46,8 @@ CI with pinned requirements, pytest settings and the sample scenario went in fir
 - Sunday 8 November: order book (#42), purchase order (#44), FIFO allocation (#43), supplier selection (#45), moving average forecast (#32) and product catalog (#31) merged.
 - Monday 9 to Wednesday 11 November: the remaining Sprint 1 items were merged during Sprint 2: clock and event log (#50), SRS, SAD and Test Plan v1.0 (#52), warehouse, EOQ and reorder point (#59), purchase order lifecycle (#47), demand generator (#18) and config loader (#33).
 - Friday 13 November: engine MVP and command line merged together (#64).
+- Tuesday 17 November: these notes (#87).
+- Wednesday 18 November: the Sprint 1 demo video, recorded on the engine MVP commit d62bfb3 so it shows the Sprint 1 version of the product.
 
 ## Blockers
 
